@@ -4,6 +4,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Button, EmptyState } from '../components/kit';
+import { AppUpdatePrompt } from '../components/ui/AppUpdatePrompt';
 import { KeyGoToast } from '../components/ui/KeyGoToast';
 import { AppProvider } from '../context/AppContext';
 import { registeredCustomers, useAuth } from '../services/auth';
@@ -30,6 +31,7 @@ function ThemedStack() {
         <Stack.Screen name="rental/[id]/track" />
       </Stack>
       <KeyGoToast />
+      <AppUpdatePrompt />
     </>
   );
 }
