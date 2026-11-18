@@ -199,7 +199,7 @@ function TemplateSheet({
         error={touched ? bodyError : undefined}
         hint={`Variables: ${Object.keys(TEMPLATE_VARIABLES).join(' ')}`}
       />
-      <Text style={styles.previewLabel}>Preview with sample data</Text>
+      <Text style={styles.previewLabel}>Preview with placeholder values</Text>
       <View style={channel === 'WhatsApp' ? styles.waBubble : styles.smsBubble}>
         <Text style={styles.previewText}>{preview || 'Your message appears here.'}</Text>
         <Text style={styles.previewMeta}>

@@ -1,6 +1,7 @@
 import { useRouter } from '@/shims/expo-router';
-import { Car, CarFront, CircleCheck, KeyRound, Plus, Search, Tag, Wrench } from 'lucide-react-native';
-import React, { useMemo, useState } from 'react';
+import { Car, CarFront, CircleCheck, KeyRound, Plus, Search, Shapes, Tag, Wrench } from 'lucide-react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { StyleSheet, Text, View } from 'react-native';
 import {
     Badge,
@@ -57,8 +58,15 @@ export default function FleetScreen() {
   const section = findSection('fleet')!;
   const extras = useResource(loadFleetExtras);
 
+  // The sidebar opens this list as "Vehicle Sales" (?status=Sold) or "Vehicle Categories" (?view=categories)
+  const search = useSearchParams();
+  const statusParam = search.get('status');
+  const categoriesView = search.get('view') === 'categories';
+  const statusFromLink = (STATUS_FILTERS as readonly string[]).includes(statusParam ?? '') ? (statusParam as StatusFilter) : 'All';
+
   const [query, setQuery] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('All');
+  const [status, setStatus] = useState<StatusFilter>(statusFromLink);
+  useEffect(() => setStatus(statusFromLink), [statusFromLink]);
   const [type, setType] = useState<TypeFilter>('All types');
   const [category, setCategory] = useState<CategoryFilter>('All categories');
   const [sort, setSort] = useState<SortKey>('Name');
@@ -217,6 +225,29 @@ export default function FleetScreen() {
           />
         ))}
       </Grid>
+
+      {categoriesView && extras.data ? (
+        <View style={{ marginTop: 4, marginBottom: 12 }}>
+          <Text style={styles.filterLabel}>Vehicle categories</Text>
+          <Grid cols={cols(2, 4, 4)}>
+            {VEHICLE_CATEGORIES.map((c) => {
+              const inCategory = vehicles.filter((v) => categoryOf(extras.data!, v.id) === c);
+              return (
+                <StatTile
+                  key={c}
+                  label={c}
+                  value={inCategory.length}
+                  hint={inCategory.length ? inCategory.map((v) => v.name).slice(0, 3).join(', ') + (inCategory.length > 3 ? '…' : '') : 'No vehicles'}
+                  tone={category === c ? 'primary' : 'neutral'}
+                  icon={(col) => <Shapes size={16} color={col} />}
+                  onPress={() => setCategory(category === c ? 'All categories' : c)}
+                />
+              );
+            })}
+          </Grid>
+          <Text style={styles.resultText}>Change a vehicle's category with Edit vehicle on its page.</Text>
+        </View>
+      ) : null}
 
       <Card style={{ marginTop: 4 }}>
         <Field

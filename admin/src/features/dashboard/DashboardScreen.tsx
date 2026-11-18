@@ -15,7 +15,6 @@ import {
     PageHeader,
     Screen,
     Section,
-    SimulatedNote,
     SplitView,
     StatTile,
     StatusBadge,
@@ -162,7 +161,6 @@ export default function OpsDashboardScreen() {
   return (
     <Screen>
       {header}
-      <SimulatedNote>Sample data. Figures are computed from local sample records.</SimulatedNote>
 
       <Section title={`Fleet · ${vehicles.length} vehicles`} subtitle="Current status of every vehicle" style={{ marginTop: 8 }}>
         <Grid cols={cols(2, 3, 5)}>
@@ -243,7 +241,7 @@ export default function OpsDashboardScreen() {
               </Section>
             </Grid>
 
-            <Section title="Revenue vs expenses" subtitle="Last three months (₹ thousands, sample data)" action={<Button label="Finance" size="sm" variant="ghost" onPress={() => open('/finance')} />}>
+            <Section title="Revenue vs expenses" subtitle="Last three months (₹ thousands)" action={<Button label="Finance" size="sm" variant="ghost" onPress={() => open('/finance')} />}>
               <Card>
                 <BarChart
                   labels={TREND_MONTHS.map((m) => m.label)}

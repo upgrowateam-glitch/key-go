@@ -70,7 +70,7 @@ export default function CustomerCommissionTab() {
   return (
     <View>
       <PendingRulesCard />
-      <SimulatedNote>Payouts are not processed in the UI phase. Changes are kept in local sample data only.</SimulatedNote>
+      <SimulatedNote>Payouts are not processed automatically yet; record them in Finance.</SimulatedNote>
 
       <Grid cols={cols(2, 2, 4)} style={{ marginTop: 8 }}>
         <StatTile label="Active codes" value={`${active.length}/${commissions.length}`} hint={`${linkedCustomers} customers linked`} tone="primary" icon={(c) => <Tag size={16} color={c} />} />

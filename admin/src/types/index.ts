@@ -1,4 +1,4 @@
-// Domain types for the KeyGo rental UI. All data is local sample data for now;
+// Domain types for the KeyGo admin portal, matching the records the KeyGo server returns;
 // these shapes are intended to map 1:1 onto future backend API payloads.
 
 export type VehicleType = 'Hatchback' | 'SUV' | 'MUV' | 'Sedan' | 'Electric' | 'Luxury';

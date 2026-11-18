@@ -122,7 +122,7 @@ export default function GpsMapTab() {
         <Button label={refreshing ? 'Refreshing' : 'Refresh positions'} size="sm" variant="outline" disabled={refreshing} icon={(c) => <RefreshCw size={14} color={c} />} onPress={refresh} />
       </View>
       <GpsMapPlaceholder markers={markers} height={isPhone ? 240 : 380} caption="Simulated GPS view · last known positions" />
-      <SimulatedNote>Positions are sample data. Live tracking will come from the GPS/telematics provider once integrated.</SimulatedNote>
+      <SimulatedNote>Positions are simulated until the GPS/telematics provider is connected.</SimulatedNote>
 
       <Section title="Vehicle positions" subtitle={`Last known GPS fix · ${positions.length} of ${onMap.length} shown`}>
         <ListToolbar query={query} onQuery={setQuery} placeholder="Vehicle, number or location" onReset={query ? () => setQuery('') : undefined} />

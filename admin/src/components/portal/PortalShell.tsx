@@ -1,35 +1,16 @@
 'use client';
 
-import React, { ReactNode, Suspense, useEffect, useState } from 'react';
+import React, { ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import {
-  Bell,
-  CalendarCheck,
-  Car,
-  ChevronDown,
-  ChevronRight,
-  ClipboardList,
-  CreditCard,
-  FileCheck,
-  Gift,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Navigation,
-  PieChart,
-  Settings,
-  TrendingUp,
-  UserCheck,
-  Users,
-  Wrench,
-} from 'lucide-react-native';
+import { Bell, LogOut, Menu } from 'lucide-react-native';
 import { AppProvider, useApp } from '../../context/AppContext';
-import { ThemeProvider, useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
+import { ThemeProvider, useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { KeyGoLogo } from '../ui/KeyGoLogo';
 import { KeyGoToast } from '../ui/KeyGoToast';
-import { NAV_SECTIONS, sectionForPath, type NavSection } from '../../config/navigation';
+import { sectionForPath } from '../../config/navigation';
+import { activeSidebarItem, hrefOf, SIDEBAR } from '../../config/sidebar';
 import { readSession, refreshSession, signOut, type StaffSession } from '../../services/auth';
 import { setUnauthorizedHandler } from '../../lib/api';
 import { onServerStateError } from '../../lib/serverState';
@@ -37,24 +18,6 @@ import { loadWorkspace } from '../../services/workspace';
 import { useResource } from '../../services/mockClient';
 import { EmptyState, Screen } from '../kit';
 import { ResourceState } from './ResourceState';
-
-const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
-  dashboard: LayoutDashboard,
-  fleet: Car,
-  bookings: CalendarCheck,
-  customers: Users,
-  agreements: FileCheck,
-  inspections: ClipboardList,
-  maintenance: Wrench,
-  tracking: Navigation,
-  fastag: CreditCard,
-  people: UserCheck,
-  finance: TrendingUp,
-  reports: PieChart,
-  notifications: Bell,
-  marketing: Gift,
-  settings: Settings,
-};
 
 const SessionContext = React.createContext<{ session: StaffSession | null; refresh: () => void }>({ session: null, refresh: () => {} });
 export const useStaffSession = () => React.useContext(SessionContext);
@@ -65,62 +28,57 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const current = sectionForPath(pathname);
-  const [expanded, setExpanded] = useState<string | undefined>(current?.id);
-  useEffect(() => setExpanded(current?.id), [current?.id]);
+
+  // Items whose page this role may open; groups left empty are hidden
+  const groups = useMemo(
+    () =>
+      SIDEBAR.map((g) => ({ ...g, items: g.items.filter((i) => sectionForPath(i.path)?.roles.includes(session.role) ?? true) })).filter((g) => g.items.length > 0),
+    [session.role]
+  );
+  const active = activeSidebarItem(
+    groups.flatMap((g) => g.items),
+    pathname,
+    new URLSearchParams(params.toString())
+  );
+
+  // Warm the route code for every page this role can open, so switching pages is instant in production builds.
+  useEffect(() => {
+    new Set(groups.flatMap((g) => g.items.map((i) => i.path))).forEach((p) => router.prefetch(p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.role]);
 
   const go = (href: string) => {
     router.push(href);
     onNavigate?.();
   };
-  const sections = NAV_SECTIONS.filter((s) => s.roles.includes(session.role));
-
-  // Warm the route code for every section this role can open, so switching sections is instant in production builds.
-  useEffect(() => {
-    sections.forEach((s) => router.prefetch(s.href));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.role]);
-
-  const item = (s: NavSection) => {
-    const Icon = ICONS[s.id];
-    const active = current?.id === s.id;
-    const open = expanded === s.id && s.tabs.length > 0;
-    const Chevron = open ? ChevronDown : ChevronRight;
-    return (
-      <View key={s.id}>
-        <TouchableOpacity
-          accessibilityRole="link"
-          accessibilityState={{ selected: active }}
-          style={[styles.item, active && { backgroundColor: colors.navLine }]}
-          onPress={() => {
-            setExpanded(s.id);
-            go(s.href);
-          }}>
-          <Icon size={18} color={active ? colors.navActive : colors.navInactive} />
-          <Text style={[styles.itemText, active && { color: colors.navActive }]} numberOfLines={1}>
-            {s.title}
-          </Text>
-          {s.tabs.length > 0 ? <Chevron size={14} color={colors.navInactive} /> : null}
-        </TouchableOpacity>
-        {open
-          ? s.tabs.map((t, i) => {
-              const tabActive = active && (params.get('tab') === t.slug || (!params.get('tab') && i === 0 && pathname === s.href));
-              return (
-                <TouchableOpacity key={t.slug} accessibilityRole="link" style={styles.subItem} onPress={() => go(`${s.href}?tab=${t.slug}`)}>
-                  <Text style={[styles.subText, tabActive && { color: colors.navActive, fontWeight: '700' }]} numberOfLines={1}>
-                    {t.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })
-          : null}
-      </View>
-    );
-  };
 
   return (
-    <ScrollView style={styles.sidebar} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
-      {sections.map(item)}
+    <ScrollView style={styles.sidebar} contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+      {groups.map((g) => (
+        <View key={g.title} style={styles.group}>
+          <Text style={styles.groupTitle} accessibilityRole="header">
+            {g.title.toUpperCase()}
+          </Text>
+          {g.items.map((i) => {
+            const isActive = active === i;
+            const Icon = i.icon;
+            return (
+              <TouchableOpacity
+                key={i.label}
+                accessibilityRole="link"
+                accessibilityState={{ selected: isActive }}
+                style={[styles.item, isActive && styles.itemActive]}
+                onPress={() => go(hrefOf(i))}>
+                {isActive ? <View style={styles.activeBar} /> : null}
+                <Icon size={17} color={isActive ? colors.navActive : colors.navInactive} />
+                <Text style={[styles.itemText, isActive && styles.itemTextActive]} numberOfLines={1}>
+                  {i.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ))}
     </ScrollView>
   );
 }
@@ -300,9 +258,12 @@ const makeStyles = (colors: ThemeColors) =>
     notifDot: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.highlight, borderWidth: 2, borderColor: colors.nav, alignItems: 'center', justifyContent: 'center' },
     notifCount: { color: colors.onHighlight, fontSize: 9, fontWeight: '800' },
     sidebar: { width: 288, flexGrow: 0, flexShrink: 0, backgroundColor: colors.nav, borderRightWidth: 1, borderRightColor: colors.navLine },
-    item: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 10, marginHorizontal: 10, marginVertical: 2, paddingHorizontal: 12, paddingVertical: 10 },
-    itemText: { flex: 1, color: colors.navInactive, fontSize: 14, fontWeight: '600', letterSpacing: 0.2 },
-    subItem: { marginLeft: 38, marginRight: 10, paddingHorizontal: 10, paddingVertical: 7 },
-    subText: { color: colors.navInactive, fontSize: 12.5, fontWeight: '500' },
+    group: { marginTop: 14 },
+    groupTitle: { color: withAlpha(colors.onNav, 0.5), fontSize: 11, fontWeight: '800', letterSpacing: 1.1, paddingHorizontal: 22, marginBottom: 6 },
+    item: { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 10, marginHorizontal: 10, marginVertical: 1, paddingHorizontal: 12, paddingVertical: 9 },
+    itemActive: { backgroundColor: colors.navLine },
+    activeBar: { position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2, backgroundColor: colors.highlight },
+    itemText: { flex: 1, color: colors.navInactive, fontSize: 13.5, fontWeight: '600', letterSpacing: 0.1 },
+    itemTextActive: { color: colors.navActive, fontWeight: '700' },
     scrim: { flex: 1, backgroundColor: colors.overlay },
   });

@@ -123,7 +123,7 @@ const makeStyles = (colors: ThemeColors) =>
     page: { flex: 1, minHeight: '100vh' as never, backgroundColor: colors.nav },
     layout: { flexGrow: 1, width: '100%' },
     // Wide: the card sits at the right edge over the city and the brand message in the top-left corner over the green
-    layoutWide: { alignItems: 'flex-end', justifyContent: 'center', paddingVertical: 40, paddingRight: '6%' as never, minHeight: '100vh' as never },
+    layoutWide: { alignItems: 'flex-end', justifyContent: 'center', paddingVertical: 40, paddingRight: '13%' as never, minHeight: '100vh' as never },
     layoutStacked: { alignItems: 'center', paddingHorizontal: 16, paddingTop: 32, paddingBottom: 32, gap: 24 },
     phoneShade: { ...StyleSheet.absoluteFillObject, backgroundColor: withAlpha(colors.nav, 0.55) },
     brand: { gap: 10 },

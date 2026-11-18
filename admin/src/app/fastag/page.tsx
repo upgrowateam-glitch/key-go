@@ -10,7 +10,7 @@ export default function FastagPage() {
   return (
     <SectionPage
       section="fastag"
-      pendingIntegration="FASTag balances and toll entries are sample data. They will come from the issuing bank / NETC API later; recharges are simulated."
+      pendingIntegration="Toll entries are recorded here by hand until the issuing bank / NETC API is connected; recharges are simulated."
       tabs={{
         'fastag-overview': FastagOverviewTab,
         'toll-transactions': TollTransactionsTab,

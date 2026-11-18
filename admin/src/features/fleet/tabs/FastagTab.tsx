@@ -106,7 +106,7 @@ export function FastagTab({ v }: { v: Vehicle }) {
         empty={<EmptyState compact title="No toll entries" message="Toll deductions for this vehicle will appear here." />}
       />
       <ListPager paged={paged} />
-      <SimulatedNote>Toll entries are sample data. Live FASTag data will come from the bank/NETC API later.</SimulatedNote>
+      <SimulatedNote>Live FASTag data will come from the bank/NETC API once connected.</SimulatedNote>
 
       <FormSheet
         visible={open}

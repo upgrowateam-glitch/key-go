@@ -15,7 +15,7 @@ export default function ReportsPage() {
     <ReportsProvider>
       <SectionPage
         section="reports"
-        pendingIntegration="Sample data. Every figure is derived from local sample records. CSV is a real download; PDF is simulated."
+        pendingIntegration="Every figure is worked out from the records saved in KeyGo. CSV is a real download; PDF is simulated."
         tabs={{
           summary: SummaryTab,
           'vehicle-wise': VehicleTab,

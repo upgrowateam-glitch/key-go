@@ -284,7 +284,7 @@ export function CreateCampaignSheet({ visible, onClose, audienceLabel }: { visib
       <SegmentedControl options={CHANNELS} value={channel} onChange={setChannel} />
       <Text style={[styles.label, { marginTop: 14 }]}>Audience</Text>
       {audienceLabel ? <Text style={styles.rowTitle}>{audienceLabel}</Text> : <ChipGroup options={AUDIENCES} value={audience} onChange={setAudience} labels={labels} />}
-      <Text style={[styles.meta, { marginTop: 6, marginBottom: 14 }]}>Counts are from local sample customers.</Text>
+      <Text style={[styles.meta, { marginTop: 6, marginBottom: 14 }]}>Counts are worked out from your customers.</Text>
       <Field
         label="Message"
         required

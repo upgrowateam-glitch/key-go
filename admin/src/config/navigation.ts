@@ -26,6 +26,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'dashboard', title: 'Dashboard', href: '/dashboard', description: 'Fleet, bookings and money at a glance', roles: ALL, tabs: [] },
   { id: 'fleet', title: 'Fleet Management', href: '/fleet', description: 'Vehicle records, status, documents and sale', roles: MANAGERS, tabs: [] },
   { id: 'bookings', title: 'Bookings & Reservations', href: '/bookings', description: 'Reservations, calendar, quotes and confirmations', roles: ALL, tabs: t('Booking List', 'Calendar', 'Create Booking', 'Quotes') },
+  { id: 'documents', title: 'Vehicle Documents', href: '/documents', description: 'Insurance, PUC and papers for every vehicle', roles: MANAGERS, tabs: [] },
   { id: 'customers', title: 'Customers', href: '/customers', description: 'Profiles, KYC, licences and documents', roles: ALL, tabs: [] },
   { id: 'agreements', title: 'Rental Agreements', href: '/agreements', description: 'Contracts, signatures, deposits, discounts and fines', roles: ALL, tabs: t('Agreement List', 'Agreement Details', 'Terms & Conditions', 'Deposits & Discounts', 'Fines & Penalties') },
   { id: 'inspections', title: 'Vehicle Inspections', href: '/inspections', description: 'Pickup and return checks, damage marking and costs', roles: ALL, tabs: t('Pickup Inspection', 'Return Inspection', 'Damage Reports', 'Inspection History') },

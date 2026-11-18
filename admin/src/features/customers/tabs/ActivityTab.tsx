@@ -49,7 +49,7 @@ export function ActivityTab({ entries }: { entries: CustomerActivity[] }) {
         empty={<EmptyState compact title={entries.length ? 'No activity matches' : 'No activity yet'} message="Profile edits and KYC reviews are recorded here." icon={(c) => <History size={22} color={c} />} />}
       />
       <ListPager paged={paged} />
-      <SimulatedNote>Earlier entries are sample data, and edits made now are kept until the page reloads. The backend will own the permanent audit trail. Sensitive values stay masked.</SimulatedNote>
+      <SimulatedNote>Every profile change made in the portal is recorded here with who made it and when. Sensitive values stay masked.</SimulatedNote>
     </View>
   );
 }

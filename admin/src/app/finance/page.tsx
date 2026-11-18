@@ -13,7 +13,7 @@ export default function FinancePage() {
   return (
     <SectionPage
       section="finance"
-      pendingIntegration="Sample data. Figures come from local records, nothing reaches a bank or accounting system, and changes reset on reload. CSV exports are real downloads of what you see."
+      pendingIntegration="Figures come from the records saved in KeyGo. Nothing reaches a bank or accounting system yet. CSV exports are real downloads."
       tabs={{
         overview: OverviewTab,
         'rental-income': RentalIncomeTab,

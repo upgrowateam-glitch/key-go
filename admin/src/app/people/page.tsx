@@ -11,7 +11,7 @@ export default function PeoplePage() {
   return (
     <SectionPage
       section="people"
-      pendingIntegration="Sample data. Changes stay in this browser and reset on reload."
+      pendingIntegration="Biometric punch devices are not connected yet; duty punches are recorded here."
       tabs={{
         'staff-directory': StaffDirectoryTab,
         drivers: DriversTab,

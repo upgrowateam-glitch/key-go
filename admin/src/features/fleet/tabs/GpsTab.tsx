@@ -63,7 +63,7 @@ export function GpsTab({ v, extras, onChanged }: { v: Vehicle; extras: FleetExtr
         <DataTable columns={EVENT_COLUMNS} rows={paged.rows} rowKey={(e) => e.id} empty={<EmptyState compact title="No GPS events" message="Events appear once the device reports." />} />
         <ListPager paged={paged} />
       </Section>
-      <SimulatedNote>GPS data is sample data. Live tracking will come from the telematics provider once integrated.</SimulatedNote>
+      <SimulatedNote>Live tracking will come from the telematics provider once connected.</SimulatedNote>
     </View>
   );
 }
