@@ -1,0 +1,669 @@
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
+import {
+  Vehicle,
+  Booking,
+  Customer,
+  Agreement,
+  AgreementFine,
+  InspectionRecord,
+  FASTagLog,
+  MaintenanceRecord,
+  MaintenanceReminder,
+  Driver,
+  StaffPunch,
+  CustomerCodeCommission,
+  NotificationItem,
+  NotificationChannelSetting,
+  MessageLogEntry,
+  AutomationRule,
+  Campaign,
+  LoyaltyRewardTier,
+  FinanceEntry,
+  RentalTerm,
+  RentalPurpose,
+  BookingClassification,
+} from '../types';
+import * as mockSeed from '../data/mockData';
+import { DEMO_TODAY } from '../data/mockData';
+import { computeQuote } from '../lib/pricing';
+import { addDays, daysBetween } from '../lib/format';
+
+export type UserRole = 'customer' | 'operations';
+
+export interface BookingDraft {
+  pickupLocation: string;
+  pickupDate: string;
+  pickupTime: string;
+  returnDate: string;
+  returnTime: string;
+  vehicleType: string;
+  term: RentalTerm;
+  purpose: RentalPurpose;
+  days: number;
+}
+
+/** Input for generating a quote (a booking in the "Quoted" state). */
+export interface QuoteInput {
+  vehicleId: string;
+  customerId?: string;
+  customerName?: string;
+  customerPhone?: string;
+  pickupLocation: string;
+  pickupDate: string;
+  pickupTime: string;
+  returnDate: string;
+  returnTime: string;
+  term: RentalTerm;
+  purpose: RentalPurpose;
+  classification: BookingClassification;
+  discount?: number;
+  driverId?: string;
+}
+
+export interface SignAgreementInput {
+  signaturePath: string;
+  signedBy: string;
+  securityDeposit: number;
+  discount: number;
+  fines: AgreementFine[];
+}
+
+export type InspectionInput = Omit<InspectionRecord, 'id' | 'bookingId' | 'vehicleNumber' | 'date' | 'type' | 'damagesMarked'>;
+
+export interface SettlementInput {
+  fuelCharges: number;
+  tollCharges: number;
+  fineCharges: number;
+  damageCharges: number;
+}
+
+interface ToastState {
+  visible: boolean;
+  message: string;
+}
+
+interface AppContextType {
+  role: UserRole;
+  setRole: (role: UserRole) => void;
+  toast: ToastState;
+  showToast: (msg: string) => void;
+  hideToast: () => void;
+  today: string;
+  /** The signed-in customer in the customer portal (sample user). */
+  currentCustomerId: string;
+
+  // Fleet
+  vehicles: Vehicle[];
+  selectedCategory: string;
+  setSelectedCategory: (cat: string) => void;
+  updateVehicleStatus: (id: string, status: Vehicle['status']) => void;
+  updateVehicle: (id: string, patch: Partial<Vehicle>) => void;
+  addVehicle: (vehicle: Vehicle) => void;
+  markVehicleSold: (id: string, sale: NonNullable<Vehicle['saleInfo']>) => void;
+
+  // Bookings & rental lifecycle
+  bookings: Booking[];
+  bookingDraft: BookingDraft;
+  setBookingDraft: React.Dispatch<React.SetStateAction<BookingDraft>>;
+  /** Legacy one-step booking (kept for compatibility). Prefer createQuote + confirmBooking. */
+  createBooking: (vehicle: Vehicle) => Booking;
+  createQuote: (input: QuoteInput) => Booking;
+  confirmBooking: (bookingId: string) => void;
+  cancelBooking: (bookingId: string) => void;
+  signAgreement: (bookingId: string, input: SignAgreementInput) => Agreement;
+  recordInspection: (bookingId: string, type: InspectionRecord['type'], input: InspectionInput) => InspectionRecord;
+  completeRental: (bookingId: string, settlement: SettlementInput) => void;
+  toggleKeylessUnlock: (bookingId: string) => void;
+  extendRental: (bookingId: string, extraDays: number) => void;
+
+  // Customers
+  customers: Customer[];
+  addCustomer: (cust: Customer) => void;
+  updateCustomer: (id: string, patch: Partial<Customer>) => void;
+
+  // Agreements & Inspections
+  agreements: Agreement[];
+  inspections: InspectionRecord[];
+  addInspection: (insp: InspectionRecord) => void;
+
+  // FASTag & Maintenance
+  fastagLogs: FASTagLog[];
+  billTollToCustomer: (logId: string) => void;
+  rechargeFastag: (vehicleId: string, amount: number) => void;
+  maintenanceLogs: MaintenanceRecord[];
+  addMaintenanceRecord: (rec: MaintenanceRecord) => void;
+  maintenanceReminders: MaintenanceReminder[];
+  completeReminder: (reminderId: string) => void;
+
+  // Staff & Drivers
+  drivers: Driver[];
+  updateDriver: (id: string, patch: Partial<Driver>) => void;
+  /** Links a driver to a booking (updates both the booking and the driver's assignments). */
+  assignDriverToBooking: (bookingId: string, driverId: string) => void;
+  staffPunches: StaffPunch[];
+  toggleDutyPunch: (staffId: string) => void;
+
+  // Business features
+  commissions: CustomerCodeCommission[];
+  updateCommission: (code: string, patch: Partial<CustomerCodeCommission>) => void;
+  addCommission: (c: CustomerCodeCommission) => void;
+  automations: AutomationRule[];
+  toggleAutomation: (id: string) => void;
+  campaigns: Campaign[];
+  addCampaign: (c: Campaign) => void;
+  updateCampaign: (id: string, patch: Partial<Campaign>) => void;
+  loyaltyTiers: LoyaltyRewardTier[];
+
+  // Finance
+  financeEntries: FinanceEntry[];
+
+  // Notifications
+  notifications: NotificationItem[];
+  markAllNotificationsRead: () => void;
+  notificationSettings: NotificationChannelSetting[];
+  toggleNotificationChannel: (type: NotificationChannelSetting['type'], channel: 'whatsapp' | 'sms') => void;
+  messageLog: MessageLogEntry[];
+  /** Simulates sending a WhatsApp/SMS message (no real delivery). */
+  sendTestMessage: (type: NotificationChannelSetting['type'], channel: MessageLogEntry['channel'], recipient: string, preview: string) => void;
+}
+
+const defaultDraft: BookingDraft = {
+  pickupLocation: 'Bengaluru International Airport (BLR)',
+  pickupDate: addDays(DEMO_TODAY, 3),
+  pickupTime: '10:00 AM',
+  returnDate: addDays(DEMO_TODAY, 6),
+  returnTime: '06:00 PM',
+  vehicleType: 'All',
+  term: 'Daily',
+  purpose: 'Personal',
+  days: 3,
+};
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+const nowLabel = () =>
+  new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+export type WorkspaceSeed = typeof mockSeed;
+
+export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }> = ({ children, seed }) => {
+  const [role, setRoleState] = useState<UserRole>('operations');
+  const [toast, setToast] = useState<ToastState>({ visible: false, message: '' });
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [vehicles, setVehicles] = useState<Vehicle[]>(seed.INITIAL_VEHICLES);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [bookings, setBookings] = useState<Booking[]>(seed.INITIAL_BOOKINGS);
+  // Latest bookings, including ones created earlier in the same event handler (e.g. quote → confirm)
+  const bookingsRef = useRef(bookings);
+  useEffect(() => {
+    bookingsRef.current = bookings;
+  }, [bookings]);
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(defaultDraft);
+
+  const [customers, setCustomers] = useState<Customer[]>(seed.INITIAL_CUSTOMERS);
+  const [agreements, setAgreements] = useState<Agreement[]>(seed.INITIAL_AGREEMENTS);
+  const [inspections, setInspections] = useState<InspectionRecord[]>(seed.INITIAL_INSPECTIONS);
+  const [staffPunches, setStaffPunches] = useState<StaffPunch[]>(seed.INITIAL_STAFF_PUNCHES);
+  const [fastagLogs, setFastagLogs] = useState<FASTagLog[]>(seed.INITIAL_FASTAG_LOGS);
+  const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceRecord[]>(seed.INITIAL_MAINTENANCE);
+  const [maintenanceReminders, setMaintenanceReminders] = useState<MaintenanceReminder[]>(seed.INITIAL_MAINTENANCE_REMINDERS);
+  const [drivers, setDrivers] = useState<Driver[]>(seed.INITIAL_DRIVERS);
+  const [commissions, setCommissions] = useState<CustomerCodeCommission[]>(seed.INITIAL_COMMISSIONS);
+  const [automations, setAutomations] = useState<AutomationRule[]>(seed.INITIAL_AUTOMATIONS);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(seed.INITIAL_CAMPAIGNS);
+  const [financeEntries, setFinanceEntries] = useState<FinanceEntry[]>(seed.INITIAL_FINANCE);
+  const [notifications, setNotifications] = useState<NotificationItem[]>(seed.INITIAL_NOTIFICATIONS);
+  const [notificationSettings, setNotificationSettings] = useState<NotificationChannelSetting[]>(seed.INITIAL_NOTIFICATION_SETTINGS);
+  const [messageLog, setMessageLog] = useState<MessageLogEntry[]>(seed.INITIAL_MESSAGE_LOG);
+  const loyaltyTiers = seed.INITIAL_LOYALTY_TIERS;
+
+  const showToast = useCallback((message: string) => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ visible: true, message });
+    toastTimer.current = setTimeout(() => setToast({ visible: false, message: '' }), 2800);
+  }, []);
+
+  const hideToast = () => setToast({ visible: false, message: '' });
+
+  const setRole = (newRole: UserRole) => {
+    setRoleState(newRole);
+    showToast(`Switched to ${newRole === 'customer' ? 'Customer view' : 'Admin & staff view'}`);
+  };
+
+  const patchBooking = (id: string, patch: Partial<Booking>) =>
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+
+  const setVehicleStatusSilently = (id: string, status: Vehicle['status']) =>
+    setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status } : v)));
+
+  // ---------- Fleet ----------
+  const updateVehicleStatus = (id: string, status: Vehicle['status']) => {
+    setVehicleStatusSilently(id, status);
+    showToast(`Vehicle status updated to ${status}`);
+  };
+
+  const updateVehicle = (id: string, patch: Partial<Vehicle>) =>
+    setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+
+  const addVehicle = (newVehicle: Vehicle) => {
+    setVehicles((prev) => [newVehicle, ...prev]);
+    showToast(`${newVehicle.name} added to fleet`);
+  };
+
+  const markVehicleSold = (id: string, sale: NonNullable<Vehicle['saleInfo']>) => {
+    setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status: 'Sold', saleInfo: sale } : v)));
+    showToast('Vehicle marked as sold');
+  };
+
+  // ---------- Booking lifecycle ----------
+  const newBookingId = () => `KG-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const createQuote = (input: QuoteInput): Booking => {
+    const vehicle = vehicles.find((v) => v.id === input.vehicleId) ?? vehicles[0];
+    const customer = customers.find((c) => c.id === input.customerId);
+    const days = Math.max(1, daysBetween(input.pickupDate, input.returnDate) || 1);
+    const q = computeQuote(vehicle, days, input.term, input.discount ?? 0);
+    const booking: Booking = {
+      id: newBookingId(),
+      customerId: customer?.id,
+      customerName: customer?.name ?? input.customerName ?? 'Walk-in customer',
+      customerPhone: customer?.phone ?? input.customerPhone ?? '',
+      vehicleId: vehicle.id,
+      vehicleName: vehicle.name,
+      vehicleNumber: vehicle.vehicleNumber,
+      vehicleCategory: vehicle.type,
+      pickupLocation: input.pickupLocation,
+      pickupDate: input.pickupDate,
+      pickupTime: input.pickupTime,
+      returnDate: input.returnDate,
+      returnTime: input.returnTime,
+      days,
+      term: input.term,
+      purpose: input.purpose,
+      classification: input.classification,
+      baseRatePerDay: vehicle.pricePerDay,
+      subtotal: q.subtotal,
+      discount: q.manualDiscount + q.termDiscount,
+      tax: q.tax,
+      totalAmount: q.total,
+      depositAmount: q.deposit,
+      status: 'Quoted',
+      paymentStatus: 'Unpaid',
+      createdAt: DEMO_TODAY,
+      reminderScheduledFor: addDays(input.pickupDate, -2),
+      reminderSent: false,
+      driverId: input.driverId,
+    };
+    bookingsRef.current = [booking, ...bookingsRef.current];
+    setBookings((prev) => [booking, ...prev]);
+    showToast(`Quote ${booking.id} generated`);
+    return booking;
+  };
+
+  const confirmBooking = (bookingId: string) => {
+    const b = bookingsRef.current.find((x) => x.id === bookingId);
+    if (!b) return;
+    setBookings((prev) =>
+      prev.map((x) =>
+        x.id === bookingId
+          ? {
+              ...x,
+              status: 'Confirmed',
+              paymentStatus: x.paymentStatus === 'Unpaid' ? 'Deposit paid' : x.paymentStatus,
+              reminderScheduledFor: addDays(x.pickupDate, -2),
+            }
+          : x
+      )
+    );
+    setVehicleStatusSilently(b.vehicleId, 'Reserved');
+    showToast(`Booking ${bookingId} confirmed · reminder scheduled`);
+  };
+
+  const cancelBooking = (bookingId: string) => {
+    const b = bookingsRef.current.find((x) => x.id === bookingId);
+    if (!b) return;
+    patchBooking(bookingId, { status: 'Cancelled' });
+    const stillHeld = bookingsRef.current.some((x) => x.id !== bookingId && x.vehicleId === b.vehicleId && (x.status === 'Confirmed' || x.status === 'Active'));
+    if (b.status !== 'Completed' && !stillHeld) setVehicleStatusSilently(b.vehicleId, 'Available');
+    showToast(`Booking ${bookingId} cancelled`);
+  };
+
+  const createBooking = (vehicle: Vehicle): Booking => {
+    const quote = createQuote({
+      vehicleId: vehicle.id,
+      customerId: 'cust-1',
+      pickupLocation: bookingDraft.pickupLocation || 'City Center',
+      pickupDate: bookingDraft.pickupDate,
+      pickupTime: bookingDraft.pickupTime,
+      returnDate: bookingDraft.returnDate,
+      returnTime: bookingDraft.returnTime,
+      term: bookingDraft.term,
+      purpose: bookingDraft.purpose,
+      classification: 'Online',
+    });
+    const confirmed: Booking = { ...quote, status: 'Confirmed', paymentStatus: 'Deposit paid' };
+    setBookings((prev) => prev.map((b) => (b.id === quote.id ? confirmed : b)));
+    setVehicleStatusSilently(vehicle.id, 'Reserved');
+    return confirmed;
+  };
+
+  const signAgreement = (bookingId: string, input: SignAgreementInput): Agreement => {
+    const b = bookings.find((x) => x.id === bookingId)!;
+    const agreement: Agreement = {
+      id: `AGR-2026-${Math.floor(100 + Math.random() * 900)}`,
+      bookingId,
+      customerName: b.customerName,
+      vehicleNumber: b.vehicleNumber,
+      signedDate: DEMO_TODAY,
+      status: 'Active',
+      depositTermsAccepted: true,
+      signaturePreview: `${input.signedBy} (Digitally Signed)`,
+      signaturePath: input.signaturePath,
+      rentalAmount: b.totalAmount,
+      securityDeposit: input.securityDeposit,
+      discount: input.discount,
+      fines: input.fines,
+    };
+    setAgreements((prev) => [agreement, ...prev]);
+    patchBooking(bookingId, { agreementId: agreement.id, depositAmount: input.securityDeposit });
+    showToast(`Agreement ${agreement.id} signed`);
+    return agreement;
+  };
+
+  const recordInspection = (
+    bookingId: string,
+    type: InspectionRecord['type'],
+    input: InspectionInput
+  ): InspectionRecord => {
+    const b = bookings.find((x) => x.id === bookingId)!;
+    const record: InspectionRecord = {
+      ...input,
+      id: `INSP-${Math.floor(100 + Math.random() * 900)}`,
+      bookingId,
+      vehicleNumber: b.vehicleNumber,
+      type,
+      damagesMarked: input.damageMarks.map((d) => `${d.zone} — ${d.kind} (${d.severity})`),
+      date: `${DEMO_TODAY} ${nowLabel()}`,
+    };
+    setInspections((prev) => [record, ...prev]);
+    if (type === 'Pickup') {
+      patchBooking(bookingId, {
+        pickupInspectionId: record.id,
+        status: 'Active',
+        startOdometerKm: input.odometerKm,
+        kmDriven: 0,
+        paymentStatus: 'Paid',
+      });
+      setVehicleStatusSilently(b.vehicleId, 'On Rent');
+      showToast('Pickup inspection saved · rental is now active');
+    } else {
+      const start = b.startOdometerKm ?? input.odometerKm;
+      patchBooking(bookingId, {
+        returnInspectionId: record.id,
+        endOdometerKm: input.odometerKm,
+        kmDriven: Math.max(0, input.odometerKm - start),
+        damageCharges: input.estimatedDamageCost,
+      });
+      updateVehicle(b.vehicleId, { odometerKm: input.odometerKm, fuelLevelPercent: input.fuelPercent });
+      showToast('Return inspection saved · ready to settle');
+    }
+    return record;
+  };
+
+  const completeRental = (bookingId: string, s: SettlementInput) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    patchBooking(bookingId, {
+      status: 'Completed',
+      paymentStatus: 'Refunded',
+      fuelCharges: s.fuelCharges,
+      tollCharges: s.tollCharges,
+      fineCharges: s.fineCharges,
+      damageCharges: s.damageCharges,
+      completedAt: DEMO_TODAY,
+      keylessUnlocked: false,
+    });
+    setVehicleStatusSilently(b.vehicleId, 'Available');
+    setAgreements((prev) => prev.map((a) => (a.bookingId === bookingId ? { ...a, status: 'Closed' } : a)));
+    const extra = s.fuelCharges + s.tollCharges + s.fineCharges + s.damageCharges;
+    setFinanceEntries((prev) => [
+      { id: `FIN-${Date.now()}`, date: DEMO_TODAY, category: 'Rental income', direction: 'in', amount: b.totalAmount, vehicleId: b.vehicleId, reference: b.id },
+      ...(s.fineCharges + s.damageCharges > 0
+        ? [{ id: `FIN-${Date.now()}-f`, date: DEMO_TODAY, category: 'Fine collection' as const, direction: 'in' as const, amount: s.fineCharges + s.damageCharges, vehicleId: b.vehicleId, reference: `${b.id} fines & damage` }]
+        : []),
+      ...prev,
+    ]);
+    setFastagLogs((prev) => prev.map((l) => (l.bookingId === bookingId ? { ...l, billedToCustomer: true } : l)));
+    showToast(extra > 0 ? `Rental completed · ₹${extra.toLocaleString('en-IN')} deducted from deposit` : 'Rental completed · full deposit refunded');
+  };
+
+  const toggleKeylessUnlock = (bookingId: string) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    const next = !b.keylessUnlocked;
+    patchBooking(bookingId, { keylessUnlocked: next });
+    showToast(next ? 'Car unlocked · digital key active (simulated)' : 'Car locked (simulated)');
+  };
+
+  const extendRental = (bookingId: string, extraDays: number) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    if (!b) return;
+    const days = b.days + extraDays;
+    const vehicle = vehicles.find((v) => v.id === b.vehicleId) ?? vehicles[0];
+    const q = computeQuote(vehicle, days, b.term, 0);
+    patchBooking(bookingId, {
+      days,
+      returnDate: addDays(b.returnDate, extraDays),
+      subtotal: q.subtotal,
+      tax: q.tax,
+      totalAmount: q.total,
+    });
+    showToast(`Extension requested · new return ${addDays(b.returnDate, extraDays)}`);
+  };
+
+  // ---------- Customers ----------
+  const addCustomer = (cust: Customer) => {
+    setCustomers((prev) => [cust, ...prev]);
+    showToast(`Customer ${cust.name} added`);
+  };
+
+  const updateCustomer = (id: string, patch: Partial<Customer>) =>
+    setCustomers((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const next = { ...c, ...patch };
+        next.name = `${next.firstName} ${next.lastName}`.trim();
+        return next;
+      })
+    );
+
+  const addInspection = (insp: InspectionRecord) => {
+    setInspections((prev) => [insp, ...prev]);
+    showToast(`Inspection report ${insp.id} saved`);
+  };
+
+  // ---------- FASTag & maintenance ----------
+  const billTollToCustomer = (logId: string) => {
+    setFastagLogs((prev) => prev.map((l) => (l.id === logId ? { ...l, billedToCustomer: true } : l)));
+    showToast('Toll added to customer bill');
+  };
+
+  const rechargeFastag = (vehicleId: string, amount: number) => {
+    setVehicles((prev) => prev.map((v) => (v.id === vehicleId ? { ...v, fastagBalance: v.fastagBalance + amount } : v)));
+    showToast(`FASTag recharge of ₹${amount.toLocaleString('en-IN')} requested (simulated)`);
+  };
+
+  const addMaintenanceRecord = (rec: MaintenanceRecord) => {
+    setMaintenanceLogs((prev) => [rec, ...prev]);
+    setFinanceEntries((prev) => [
+      { id: `FIN-${Date.now()}`, date: rec.date, category: 'Maintenance', direction: 'out', amount: rec.cost, vehicleId: rec.vehicleId, reference: rec.id },
+      ...prev,
+    ]);
+    showToast('Maintenance record added');
+  };
+
+  const completeReminder = (reminderId: string) => {
+    setMaintenanceReminders((prev) => prev.map((r) => (r.id === reminderId ? { ...r, status: 'Done' } : r)));
+    showToast('Reminder marked as done');
+  };
+
+  // ---------- Staff & drivers ----------
+  const updateDriver = (id: string, patch: Partial<Driver>) =>
+    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  const assignDriverToBooking = (bookingId: string, driverId: string) => {
+    const b = bookings.find((x) => x.id === bookingId);
+    const d = drivers.find((x) => x.id === driverId);
+    if (!b || !d) return;
+    patchBooking(bookingId, { driverId });
+    updateDriver(driverId, {
+      assignments: [
+        ...d.assignments,
+        {
+          id: `as-${Date.now()}`,
+          bookingId,
+          vehicleNumber: b.vehicleNumber,
+          date: b.pickupDate,
+          status: b.status === 'Active' ? 'In progress' : 'Upcoming',
+        },
+      ],
+      assignedVehicle: b.vehicleNumber,
+      // Only an already-active rental puts the driver on a trip; upcoming ones keep the current duty status
+      dutyStatus: b.status === 'Active' ? 'On Trip' : d.dutyStatus,
+    });
+    showToast(`${d.name} assigned to ${bookingId}`);
+  };
+
+  const toggleDutyPunch = (staffId: string) => {
+    const p = staffPunches.find((x) => x.id === staffId);
+    if (!p) return;
+    const isOut = p.status === 'Punched Out';
+    const now = nowLabel();
+    setStaffPunches((prev) =>
+      prev.map((x) =>
+        x.id === staffId
+          ? {
+              ...x,
+              status: isOut ? 'Punched In' : 'Punched Out',
+              punchIn: isOut ? now : x.punchIn,
+              punchOut: isOut ? undefined : now,
+            }
+          : x
+      )
+    );
+    showToast(isOut ? `${p.staffName} punched in at ${now}` : `${p.staffName} punched out at ${now}`);
+  };
+
+  // ---------- Business features ----------
+  const updateCommission = (code: string, patch: Partial<CustomerCodeCommission>) =>
+    setCommissions((prev) => prev.map((c) => (c.code === code ? { ...c, ...patch } : c)));
+
+  const addCommission = (c: CustomerCodeCommission) => {
+    setCommissions((prev) => [c, ...prev]);
+    showToast(`Customer code ${c.code} created`);
+  };
+
+  const toggleAutomation = (id: string) =>
+    setAutomations((prev) => prev.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a)));
+
+  const addCampaign = (c: Campaign) => {
+    setCampaigns((prev) => [c, ...prev]);
+    showToast(`Campaign "${c.name}" saved`);
+  };
+
+  const updateCampaign = (id: string, patch: Partial<Campaign>) =>
+    setCampaigns((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+
+  // ---------- Notifications ----------
+  const markAllNotificationsRead = () =>
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+
+  const toggleNotificationChannel = (type: NotificationChannelSetting['type'], channel: 'whatsapp' | 'sms') =>
+    setNotificationSettings((prev) => prev.map((s) => (s.type === type ? { ...s, [channel]: !s[channel] } : s)));
+
+  const sendTestMessage: AppContextType['sendTestMessage'] = (type, channel, recipient, preview) => {
+    const id = `MSG-${Date.now()}`;
+    setMessageLog((prev) => [{ id, channel, type, recipient, preview, status: 'Queued', time: `Today, ${nowLabel()}` }, ...prev]);
+    showToast(`${channel} test queued (simulated — nothing is sent)`);
+    // Simulated delivery lifecycle
+    setTimeout(() => setMessageLog((prev) => prev.map((m) => (m.id === id ? { ...m, status: 'Sent' } : m))), 1200);
+    setTimeout(() => setMessageLog((prev) => prev.map((m) => (m.id === id ? { ...m, status: 'Delivered' } : m))), 2600);
+  };
+
+  return (
+    <AppContext.Provider
+      value={{
+        role,
+        setRole,
+        toast,
+        showToast,
+        hideToast,
+        today: DEMO_TODAY,
+        currentCustomerId: 'cust-1',
+        vehicles,
+        selectedCategory,
+        setSelectedCategory,
+        updateVehicleStatus,
+        updateVehicle,
+        addVehicle,
+        markVehicleSold,
+        bookings,
+        bookingDraft,
+        setBookingDraft,
+        createBooking,
+        createQuote,
+        confirmBooking,
+        cancelBooking,
+        signAgreement,
+        recordInspection,
+        completeRental,
+        toggleKeylessUnlock,
+        extendRental,
+        customers,
+        addCustomer,
+        updateCustomer,
+        agreements,
+        inspections,
+        addInspection,
+        fastagLogs,
+        billTollToCustomer,
+        rechargeFastag,
+        maintenanceLogs,
+        addMaintenanceRecord,
+        maintenanceReminders,
+        completeReminder,
+        drivers,
+        updateDriver,
+        assignDriverToBooking,
+        staffPunches,
+        toggleDutyPunch,
+        commissions,
+        updateCommission,
+        addCommission,
+        automations,
+        toggleAutomation,
+        campaigns,
+        addCampaign,
+        updateCampaign,
+        loyaltyTiers,
+        financeEntries,
+        notifications,
+        markAllNotificationsRead,
+        notificationSettings,
+        toggleNotificationChannel,
+        messageLog,
+        sendTestMessage,
+      }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};

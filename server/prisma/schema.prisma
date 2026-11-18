@@ -1,0 +1,263 @@
+// KeyGo core data model — phase 1 (users, customers, branches, vehicles, rates, bookings).
+// Later phases add agreements, inspections, payments, maintenance, finance, marketing and the rest of
+// Documentation/database-design.md. Money is stored in paise as integers.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- Enums
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum VehicleType {
+  HATCHBACK
+  SEDAN
+  SUV
+  MUV
+  ELECTRIC
+  LUXURY
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RESERVED
+  ON_RENT
+  MAINTENANCE
+  SOLD
+}
+
+enum Transmission {
+  AUTO
+  MANUAL
+}
+
+enum RentalTerm {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum RentalPurpose {
+  PERSONAL
+  BUSINESS
+  OUTSTATION
+  VACATION
+}
+
+enum BookingClassification {
+  ONLINE
+  WALK_IN
+  CORPORATE
+  REPEAT_CUSTOMER
+  REFERRAL
+}
+
+enum BookingStatus {
+  QUOTED
+  PENDING
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  DEPOSIT_PAID
+  PAID
+  REFUNDED
+}
+
+enum LoyaltyTier {
+  BRONZE
+  SILVER
+  GOLD
+  VIP
+}
+
+enum VerificationStatus {
+  VERIFIED
+  PENDING
+  NOT_UPLOADED
+  REJECTED
+}
+
+// ---------------------------------------------------------------- Branches and staff
+
+model Branch {
+  id        String    @id @default(cuid())
+  name      String
+  address   String
+  city      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  users     User[]
+  vehicles  Vehicle[]
+
+  @@map("branches")
+}
+
+/// Staff and admin accounts for the admin portal.
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  branchId     String?  @map("branch_id")
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ---------------------------------------------------------------- Customers
+
+model Customer {
+  id               String             @id @default(cuid())
+  firstName        String             @map("first_name")
+  lastName         String             @map("last_name")
+  dob              DateTime?          @db.Date
+  phone            String             @unique
+  email            String             @unique
+  passwordHash     String?            @map("password_hash")
+  address          String?
+  city             String?
+  /// Encrypted at rest; only the last four digits are ever returned by the API.
+  aadhaarNoEnc     String?            @map("aadhaar_no_enc")
+  aadhaarLast4     String?            @map("aadhaar_last4")
+  dlNumber         String?            @map("dl_number")
+  dlState          String?            @map("dl_state")
+  dlExpiry         DateTime?          @map("dl_expiry") @db.Date
+  careOfName       String?            @map("care_of_name")
+  careOfRelation   String?            @map("care_of_relation")
+  careOfPhone      String?            @map("care_of_phone")
+  /// Referral / commission code shown in the apps.
+  customerCode     String?            @unique @map("customer_code")
+  idCardStatus     VerificationStatus @default(NOT_UPLOADED) @map("id_card_status")
+  faceVerification VerificationStatus @default(NOT_UPLOADED) @map("face_verification")
+  loyaltyTier      LoyaltyTier        @default(BRONZE) @map("loyalty_tier")
+  loyaltyPoints    Int                @default(0) @map("loyalty_points")
+  /// 0.0 – 5.0, maintained by the business rules in later phases.
+  trustRating      Decimal            @default(5.0) @map("trust_rating") @db.Decimal(2, 1)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  bookings         Booking[]
+
+  @@map("customers")
+}
+
+// ---------------------------------------------------------------- Fleet
+
+model Vehicle {
+  id                String        @id @default(cuid())
+  name              String
+  brand             String?
+  type              VehicleType
+  color             String?
+  seats             Int
+  transmission      Transmission
+  fuel              String
+  badge             String?
+  status            VehicleStatus @default(AVAILABLE)
+  registrationNo    String        @unique @map("registration_no")
+  purchaseCostPaise Int?          @map("purchase_cost_paise")
+  purchaseDate      DateTime?     @map("purchase_date") @db.Date
+  odometerKm        Int           @default(0) @map("odometer_km")
+  fuelLevelPercent  Int           @default(100) @map("fuel_level_percent")
+  gpsDeviceId       String?       @map("gps_device_id")
+  fastagId          String?       @map("fastag_id")
+  insuranceProvider String?       @map("insurance_provider")
+  insurancePolicyNo String?       @map("insurance_policy_no")
+  insuranceExpiry   DateTime?     @map("insurance_expiry") @db.Date
+  pucCertificateNo  String?       @map("puc_certificate_no")
+  pucExpiry         DateTime?     @map("puc_expiry") @db.Date
+  photoUrl          String?       @map("photo_url")
+  branchId          String?       @map("branch_id")
+  branch            Branch?       @relation(fields: [branchId], references: [id])
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  rates             VehicleRate[]
+  bookings          Booking[]
+
+  @@index([status])
+  @@index([type])
+  @@map("vehicles")
+}
+
+/// Price list for a vehicle. The row with the latest `valid_from` on or before today is the current one.
+model VehicleRate {
+  id                String   @id @default(cuid())
+  vehicleId         String   @map("vehicle_id")
+  vehicle           Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  dailyPaise        Int      @map("daily_paise")
+  weeklyPaise       Int      @map("weekly_paise")
+  monthlyPaise      Int      @map("monthly_paise")
+  depositPaise      Int      @map("deposit_paise")
+  driverPerDayPaise Int      @map("driver_per_day_paise")
+  validFrom         DateTime @default(now()) @map("valid_from") @db.Date
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([vehicleId, validFrom])
+  @@map("vehicle_rates")
+}
+
+// ---------------------------------------------------------------- Bookings
+
+/// Quotes, reservations and rentals. The migration adds an exclusion constraint so a vehicle can never
+/// hold two CONFIRMED/ACTIVE bookings whose [pickup_at, return_at) periods overlap.
+model Booking {
+  id                 String                @id @default(cuid())
+  customerId         String?               @map("customer_id")
+  customer           Customer?             @relation(fields: [customerId], references: [id])
+  /// Kept for walk-in bookings made before the customer has an account.
+  customerName       String                @map("customer_name")
+  customerPhone      String                @map("customer_phone")
+  vehicleId          String                @map("vehicle_id")
+  vehicle            Vehicle               @relation(fields: [vehicleId], references: [id])
+  pickupLocation     String                @map("pickup_location")
+  pickupAt           DateTime              @map("pickup_at")
+  returnAt           DateTime              @map("return_at")
+  days               Int
+  term               RentalTerm
+  purpose            RentalPurpose
+  classification     BookingClassification @default(ONLINE)
+  baseRatePaise      Int                   @map("base_rate_paise")
+  subtotalPaise      Int                   @map("subtotal_paise")
+  discountPaise      Int                   @default(0) @map("discount_paise")
+  taxPaise           Int                   @map("tax_paise")
+  totalPaise         Int                   @map("total_paise")
+  depositPaise       Int                   @map("deposit_paise")
+  withDriver         Boolean               @default(false) @map("with_driver")
+  status             BookingStatus         @default(PENDING)
+  paymentStatus      PaymentStatus         @default(UNPAID) @map("payment_status")
+  reminderAt         DateTime?             @map("reminder_at")
+  reminderSent       Boolean               @default(false) @map("reminder_sent")
+  startOdometerKm    Int?                  @map("start_odometer_km")
+  endOdometerKm      Int?                  @map("end_odometer_km")
+  damageChargesPaise Int?                  @map("damage_charges_paise")
+  fuelChargesPaise   Int?                  @map("fuel_charges_paise")
+  tollChargesPaise   Int?                  @map("toll_charges_paise")
+  fineChargesPaise   Int?                  @map("fine_charges_paise")
+  completedAt        DateTime?             @map("completed_at")
+  cancelledAt        DateTime?             @map("cancelled_at")
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+
+  @@index([vehicleId, pickupAt])
+  @@index([customerId])
+  @@index([status])
+  @@map("bookings")
+}

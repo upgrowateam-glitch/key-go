@@ -1,0 +1,23 @@
+# Each app also has its own .gitignore (Customer/.gitignore, Admin/.gitignore).
+
+# Dependencies and build output, in any app
+node_modules/
+.next/
+.expo/
+dist/
+web-build/
+
+# Environment and secrets
+.env
+.env*.local
+*.pem
+*.key
+
+# Logs and OS files
+npm-debug.*
+.DS_Store
+Thumbs.db
+
+# Local tooling state and ad-hoc backups
+.claude/settings.local.json
+*.zip

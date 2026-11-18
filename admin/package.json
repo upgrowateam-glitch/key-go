@@ -1,0 +1,29 @@
+{
+  "name": "keygo-admin-web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "dev:webpack": "next dev --webpack -p 3000",
+    "build": "next build",
+    "build:webpack": "next build --webpack",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-native/assets-registry": "0.86.3",
+    "lucide-react-native": "^1.48.0",
+    "next": "16.4.3",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "~0.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.0",
+    "@types/react-native": "0.72.8",
+    "typescript": "~6.0.3"
+  }
+}
