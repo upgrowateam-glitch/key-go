@@ -6,3 +6,17 @@ body {
   background: #edf3ee;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
+
+/* The sign-in page has its own show/hide password button; hide the browser's built-in one (Edge) */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* A soft brand-coloured focus ring instead of the browser's black outline */
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid rgba(12, 59, 46, 0.35);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
