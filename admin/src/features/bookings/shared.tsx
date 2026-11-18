@@ -15,7 +15,7 @@ export const TERM_FILTERS = ['All', ...TERMS] as const;
 export const PURPOSES: readonly RentalPurpose[] = ['Personal', 'Business', 'Outstation', 'Vacation'];
 export const CLASSIFICATIONS: readonly BookingClassification[] = ['Online', 'Walk-in', 'Corporate', 'Repeat customer', 'Referral'];
 export const CLASS_FILTERS = ['All', ...CLASSIFICATIONS] as const;
-export const CATEGORIES: readonly VehicleType[] = ['SUV', 'Sedan', 'Electric', 'Luxury'];
+export const CATEGORIES: readonly VehicleType[] = ['Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'];
 export const CATEGORY_FILTERS = ['All', ...CATEGORIES] as const;
 
 export const CLASS_TONE: Record<BookingClassification, Tone> = {

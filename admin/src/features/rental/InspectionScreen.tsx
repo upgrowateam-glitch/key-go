@@ -31,6 +31,7 @@ import { formatINR, formatKm } from '../../lib/format';
 import { CHECKLIST_ITEMS, getChecklist, saveChecklist, SUGGESTED_COST } from '../../services/inspections';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import { CarZone, DamageMark, InspectionRecord } from '../../types';
+import { readSession } from '../../services/auth';
 
 const PHOTO_SLOTS = ['Front', 'Rear', 'Left side', 'Right side', 'Interior', 'Odometer', 'Boot', 'Tyres'];
 const REQUIRED_PHOTOS = ['Front', 'Rear', 'Left side', 'Right side'];
@@ -52,7 +53,7 @@ export default function InspectionScreen() {
   const existing = inspections.find((i) => i.bookingId === bookingId && i.type === type);
   const pickupRecord = inspections.find((i) => i.bookingId === bookingId && i.type === 'Pickup');
 
-  const [inspector, setInspector] = useState('Vikram Singh');
+  const [inspector, setInspector] = useState(() => readSession()?.name ?? '');
   const [odometer, setOdometer] = useState(String(vehicle?.odometerKm ?? ''));
   const [fuel, setFuel] = useState(vehicle?.fuelLevelPercent ?? 100);
   const [photos, setPhotos] = useState<string[]>([]);

@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react-native';
 import { Button, ChipGroup, Field } from '../../components/kit';
 import { ResourceState } from '../../components/portal/ResourceState';
+import { serverDoc } from '../../lib/serverState';
 import { mockRequest, useResource } from '../../services/mockClient';
 import { useThemeColors } from '../../theme';
 
@@ -14,15 +15,15 @@ export interface Store<T> {
 }
 
 /**
- * In-memory record set behind a mock service. It outlives tab switches and resets on page reload.
- * Swap `load` and `save` for NestJS calls when the backend exists.
+ * A portal list or settings form stored on the server as one document under `key`.
+ * `defaultValue` is used until the document is first saved. Save failures are reported as a toast.
  */
-export function createStore<T>(seed: T): Store<T> {
-  let current = seed;
+export function createStore<T>(key: string, defaultValue: T): Store<T> {
+  const doc = serverDoc<T>(key, defaultValue);
   return {
-    load: () => mockRequest(() => current),
+    load: () => mockRequest(() => doc.get()),
     save: (value) => {
-      current = value;
+      doc.set(value).catch(() => undefined);
     },
   };
 }

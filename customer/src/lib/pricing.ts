@@ -1,7 +1,7 @@
 import { RentalTerm, Vehicle } from '../types';
 import { ratesFor, TAX_RATE } from '../data/pricing';
 
-/** Rules that turn the rates in data/pricing.ts into quotes. */
+/** Rules that turn a vehicle's price list into a quote; the server applies the same rules to every booking. */
 export const PRICING_RULES = {
   taxRate: TAX_RATE,
   minDays: { Daily: 1, Weekly: 7, Monthly: 30 } as Record<RentalTerm, number>,
@@ -21,7 +21,7 @@ export interface Quote {
 }
 
 /** Days charged at the term's rate: the weekly rate covers 7 days, the monthly rate 30, prorated beyond that. */
-export function computeQuote(vehicle: Pick<Vehicle, 'id' | 'pricePerDay'>, days: number, term: RentalTerm, manualDiscount = 0): Quote {
+export function computeQuote(vehicle: Pick<Vehicle, 'pricePerDay' | 'rates'>, days: number, term: RentalTerm, manualDiscount = 0): Quote {
   const rates = ratesFor(vehicle);
   const d = Math.max(1, Math.round(days));
   const base = rates.daily * d;

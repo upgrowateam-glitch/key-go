@@ -1,7 +1,7 @@
 // Domain types for the KeyGo rental UI. All data is local sample data for now;
 // these shapes are intended to map 1:1 onto future backend API payloads.
 
-export type VehicleType = 'SUV' | 'Sedan' | 'Electric' | 'Luxury';
+export type VehicleType = 'Hatchback' | 'SUV' | 'MUV' | 'Sedan' | 'Electric' | 'Luxury';
 export type CarKind = 'suv' | 'sedan' | 'sport' | 'ev';
 export type VehicleStatus = 'Available' | 'Reserved' | 'On Rent' | 'Maintenance' | 'Sold';
 
@@ -28,6 +28,15 @@ export interface PhotoCredit {
   author: string;
   license: string;
   url: string;
+}
+
+/** Vehicle price list in rupees, from the server. */
+export interface VehicleRates {
+  daily: number;
+  weekly: number;
+  monthly: number;
+  deposit: number;
+  driverPerDay: number;
 }
 
 export interface Vehicle {
@@ -68,6 +77,10 @@ export interface Vehicle {
   /** Labels of photos on file (e.g. "Front", "Interior"); images are placeholders in the UI phase. */
   photoLabels: string[];
   photoUrl?: string;
+  /** Name of the fleet photo shipped with the apps (public/images/fleet/<photoKey>.png). */
+  photoKey?: string;
+  /** Current price list; pricePerDay equals rates.daily. */
+  rates?: VehicleRates;
   imageAsset?: any;
   /** Attribution for `imageAsset` (real photos are Creative Commons licensed and must be credited). */
   photoCredit?: PhotoCredit;

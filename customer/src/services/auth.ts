@@ -1,20 +1,18 @@
+import '../theme/installStorage';
 import { useSyncExternalStore } from 'react';
-import { Customer } from '../types';
-import { mockRequest } from './mockClient';
+import { api, setApiToken, setUnauthorizedHandler } from '../lib/api';
+import type { Customer } from '../types';
 
-export const DEMO_EMAIL = 'ananya.s@example.com';
-export const DEMO_PASSWORD = 'keygo123';
-
-const KEY = 'keygo.customer.auth.v1';
+const KEY = 'keygo.customer.auth.v2';
 
 interface AuthState {
   onboarded: boolean;
+  /** Sign-in token from the KeyGo server. */
+  token: string | null;
   customerId: string | null;
-  /** Accounts created in the app; real accounts move to the NestJS backend later. */
-  registered: { customer: Customer; password: string }[];
 }
 
-const EMPTY: AuthState = { onboarded: false, customerId: null, registered: [] };
+const EMPTY: AuthState = { onboarded: false, token: null, customerId: null };
 
 function read(): AuthState {
   try {
@@ -26,10 +24,12 @@ function read(): AuthState {
 }
 
 let state = read();
+setApiToken(state.token);
 const listeners = new Set<() => void>();
 
 function update(patch: Partial<AuthState>) {
   state = { ...state, ...patch };
+  setApiToken(state.token);
   try {
     globalThis.localStorage?.setItem(KEY, JSON.stringify(state));
   } catch {
@@ -49,19 +49,21 @@ const subscribe = (l: () => void) => {
 export const useAuth = () => useSyncExternalStore(subscribe, () => state, () => EMPTY);
 
 export const completeOnboarding = () => update({ onboarded: true });
-export const signOut = () => update({ customerId: null });
+export const signOut = () => update({ token: null, customerId: null });
 
-export const signIn = (email: string, password: string, known: Customer[]) =>
-  mockRequest(() => {
-    const normalized = email.trim().toLowerCase();
-    const account = state.registered.find((r) => r.customer.email.toLowerCase() === normalized);
-    if (account && account.password === password) return account.customer.id;
-    if (!account && normalized === DEMO_EMAIL && password === DEMO_PASSWORD) {
-      const demo = known.find((c) => c.email.toLowerCase() === DEMO_EMAIL);
-      if (demo) return demo.id;
-    }
-    throw new Error('Incorrect email or password.');
-  }).then((customerId) => update({ customerId }));
+// A rejected token (expired, or the account was removed) signs the customer out
+setUnauthorizedHandler(signOut);
+
+interface SessionResponse {
+  token: string;
+  customer: Customer;
+}
+
+export async function signIn(email: string, password: string) {
+  const res = await api<SessionResponse>('/auth/customer/login', { method: 'POST', body: { email: email.trim().toLowerCase(), password }, auth: false });
+  update({ token: res.token, customerId: res.customer.id, onboarded: true });
+  return res.customer;
+}
 
 export interface RegistrationInput {
   firstName: string;
@@ -72,46 +74,12 @@ export interface RegistrationInput {
   password: string;
 }
 
-export const register = (input: RegistrationInput, known: Customer[], today: string) =>
-  mockRequest(() => {
-    const email = input.email.trim().toLowerCase();
-    if (known.some((c) => c.email.toLowerCase() === email) || state.registered.some((r) => r.customer.email.toLowerCase() === email)) {
-      throw new Error('An account with this email already exists.');
-    }
-    const firstName = input.firstName.trim();
-    const lastName = input.lastName.trim();
-    const customer: Customer = {
-      id: `cust-${Date.now()}`,
-      name: `${firstName} ${lastName}`.trim(),
-      firstName,
-      lastName,
-      dob: input.dob,
-      phone: input.phone.trim(),
-      email,
-      address: '',
-      city: '',
-      aadhaarNo: '',
-      idCardStatus: 'Not uploaded',
-      faceVerification: 'Not uploaded',
-      photoCaptured: false,
-      dlNumber: '',
-      dlState: '',
-      dlExpiry: '',
-      careOfName: '',
-      careOfRelation: '',
-      careOfPhone: '',
-      customerCode: `KG${firstName.slice(0, 3).toUpperCase()}${Math.floor(100 + Math.random() * 900)}`,
-      documents: [],
-      customerSince: today,
-      loyaltyTier: 'Bronze',
-      loyaltyPoints: 0,
-      avatarBg: '#DCE8DE',
-      trustRating: 0,
-    };
-    return customer;
-  }).then((customer) => {
-    update({ registered: [...state.registered, { customer, password: input.password }], customerId: customer.id });
-    return customer;
+export async function register(input: RegistrationInput) {
+  const res = await api<SessionResponse>('/auth/customer/register', {
+    method: 'POST',
+    body: { ...input, email: input.email.trim().toLowerCase(), phone: input.phone.trim() },
+    auth: false,
   });
-
-export const registeredCustomers = () => state.registered.map((r) => r.customer);
+  update({ token: res.token, customerId: res.customer.id, onboarded: true });
+  return res.customer;
+}

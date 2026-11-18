@@ -241,7 +241,7 @@ function AddFineSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () =
   const booking = bookings.find((b) => b.id.toLowerCase() === bookingText.trim().toLowerCase());
   const amount = Number(amountText);
   const errors = {
-    booking: booking ? undefined : 'Enter an existing booking number, such as KG-7104',
+    booking: booking ? undefined : 'Enter an existing booking number',
     amount: !amountText.trim() || Number.isNaN(amount) || amount <= 0 ? 'Enter an amount above zero' : undefined,
     date: dateError(date),
   };
@@ -282,7 +282,7 @@ function AddFineSheet({ onClose, onSaved }: { onClose: () => void; onSaved: () =
         required
         value={bookingText}
         onChangeText={setBookingText}
-        placeholder="KG-7104"
+        placeholder="Booking number"
         error={submitted ? errors.booking : undefined}
         hint={booking ? `${booking.customerName} · ${booking.vehicleName}` : undefined}
       />

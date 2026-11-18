@@ -34,7 +34,7 @@ import { VehicleForm } from './VehicleForm';
 
 const STATUS_FILTERS = ['All', 'Available', 'Reserved', 'On Rent', 'Maintenance', 'Sold'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
-const TYPE_FILTERS = ['All types', 'SUV', 'Sedan', 'Electric', 'Luxury'] as const;
+const TYPE_FILTERS = ['All types', 'Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
 const CATEGORY_FILTERS = ['All categories', ...VEHICLE_CATEGORIES] as const;
 type CategoryFilter = (typeof CATEGORY_FILTERS)[number];

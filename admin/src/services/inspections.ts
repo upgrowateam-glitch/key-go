@@ -1,5 +1,6 @@
-import { mockRequest } from './mockClient';
-import { DEMO_TODAY } from '../data/mockData';
+import { newId } from '../config/defaults';
+import { serverDoc } from '../lib/serverState';
+import { TODAY } from '../lib/today';
 import type { CarZone, DamageMark } from '../types';
 
 export const CHECKLIST_ITEMS = [
@@ -14,7 +15,7 @@ export const CHECKLIST_ITEMS = [
 ] as const;
 export type ChecklistResult = Record<string, boolean>;
 
-/** Suggested repair estimates — placeholders the inspector can overwrite. */
+/** Suggested repair estimates — the inspector can overwrite them. */
 export const SUGGESTED_COST: Record<DamageMark['severity'], number> = { Minor: 1500, Moderate: 5000, Major: 15000 };
 
 export const DAMAGE_STATUSES = ['Reported', 'Estimated', 'In repair', 'Repaired', 'Charged', 'Waived'] as const;
@@ -44,34 +45,30 @@ export interface ManualDamageReport extends DamageEstimate {
   status: DamageStatus;
 }
 
-// Mock server state: survives tab switches, resets on reload.
-const checklists = new Map<string, ChecklistResult>();
-let overlays: Record<string, DamageOverlay> = {};
-let manual: ManualDamageReport[] = [
-  { id: 'DMG-301', vehicleId: 'car-4', zone: 'Left rear door', kind: 'Dent', severity: 'Moderate', parts: 0, labour: 3500, paint: 2500, reportedBy: 'Vikram Singh', reportedOn: '2026-09-18', notes: 'Found in the yard after a parking incident.', status: 'In repair' },
-];
+/** Checklist results by inspection id; kept next to the inspection records. */
+const checklistsDoc = serverDoc<Record<string, ChecklistResult>>('inspections.checklists', {});
+const damageDoc = serverDoc<{ overlays: Record<string, DamageOverlay>; manual: ManualDamageReport[] }>('inspections.damage', { overlays: {}, manual: [] });
 
-/** Stored alongside recordInspection, which only keeps the fields on InspectionRecord. */
 export const saveChecklist = (inspectionId: string, result: ChecklistResult) => {
-  checklists.set(inspectionId, result);
+  checklistsDoc.set({ ...checklistsDoc.get(), [inspectionId]: result }).catch(() => undefined);
 };
-export const getChecklist = (inspectionId: string) => checklists.get(inspectionId);
+export const getChecklist = (inspectionId: string) => checklistsDoc.get()[inspectionId];
 
-const snapshot = () => ({ overlays, manual });
-export const loadDamage = () => mockRequest(snapshot);
+const snapshot = () => damageDoc.get();
+export const loadDamage = async () => snapshot();
 
-export const addManualDamage = (input: Omit<ManualDamageReport, 'id' | 'reportedOn' | 'status'>) =>
-  mockRequest(() => {
-    manual = [{ ...input, id: `DMG-${Date.now().toString(36).toUpperCase()}`, reportedOn: DEMO_TODAY, status: 'Reported' }, ...manual];
-    return snapshot();
-  });
+export const addManualDamage = async (input: Omit<ManualDamageReport, 'id' | 'reportedOn' | 'status'>) => {
+  const d = snapshot();
+  await damageDoc.set({ ...d, manual: [{ ...input, id: newId('DMG'), reportedOn: TODAY, status: 'Reported' }, ...d.manual] });
+  return snapshot();
+};
 
-export const updateDamage = (key: string, patch: Partial<DamageOverlay>) =>
-  mockRequest(() => {
-    if (manual.some((m) => m.id === key)) {
-      manual = manual.map((m) => (m.id === key ? { ...m, ...patch } : m));
-    } else {
-      overlays = { ...overlays, [key]: { ...(overlays[key] ?? { status: 'Reported' }), ...patch } };
-    }
-    return snapshot();
-  });
+export const updateDamage = async (key: string, patch: Partial<DamageOverlay>) => {
+  const d = snapshot();
+  await damageDoc.set(
+    d.manual.some((m) => m.id === key)
+      ? { ...d, manual: d.manual.map((m) => (m.id === key ? { ...m, ...patch } : m)) }
+      : { ...d, overlays: { ...d.overlays, [key]: { ...(d.overlays[key] ?? { status: 'Reported' }), ...patch } } }
+  );
+  return snapshot();
+};

@@ -14,7 +14,7 @@ import { sumCategories, TREND_MONTHS, useLedger } from '../finance/useLedger';
 
 export const PERIODS = ['Daily', 'Weekly', 'Monthly'] as const;
 export type ReportPeriod = (typeof PERIODS)[number];
-const CATEGORIES = ['All', 'SUV', 'Sedan', 'Electric', 'Luxury'] as const;
+const CATEGORIES = ['All', 'Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
 type CategoryFilter = (typeof CATEGORIES)[number];
 
 export interface Bucket {

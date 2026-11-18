@@ -11,7 +11,7 @@ import type { RentalTerm, Vehicle, VehicleType } from '../../types';
 import { FormActions, isWholeNumber, makeSettingsStyles } from './formParts';
 
 const TERMS: RentalTerm[] = ['Daily', 'Weekly', 'Monthly'];
-const CATEGORIES: VehicleType[] = ['SUV', 'Sedan', 'Electric', 'Luxury'];
+const CATEGORIES: VehicleType[] = ['Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'];
 const TYPE_FILTERS = ['All', ...CATEGORIES] as const;
 type TypeFilter = (typeof TYPE_FILTERS)[number];
 

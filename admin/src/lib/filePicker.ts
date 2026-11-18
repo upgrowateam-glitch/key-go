@@ -33,3 +33,9 @@ export function documentFileProblem(file: File): string | null {
   if (file.size > DOCUMENT_MAX_BYTES) return 'The file is larger than 10 MB';
   return null;
 }
+
+export function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

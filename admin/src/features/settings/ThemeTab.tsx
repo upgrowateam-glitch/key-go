@@ -141,7 +141,7 @@ function LivePreview() {
       </View>
       <View style={{ padding: 16, backgroundColor: colors.bg, gap: 14 }}>
         <Card>
-          <Text style={styles.previewTitle}>Booking KG-6299</Text>
+          <Text style={styles.previewTitle}>Booking KG-XXXXXX</Text>
           <Text style={styles.editorSub}>Urban SUV · 28 Sep → 5 Oct</Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
             <StatusBadge status="Confirmed" />

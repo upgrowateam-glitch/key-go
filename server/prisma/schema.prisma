@@ -1,6 +1,13 @@
-// KeyGo core data model — phase 1 (users, customers, branches, vehicles, rates, bookings).
-// Later phases add agreements, inspections, payments, maintenance, finance, marketing and the rest of
-// Documentation/database-design.md. Money is stored in paise as integers.
+// KeyGo data model. Money is stored in paise as integers.
+//
+// Core entities (staff users, customers, vehicles, rates, bookings) have real columns, so the database
+// can enforce the rules that matter (unique logins, no double bookings). Each also has a `details` JSON
+// column for the extra fields the apps show.
+//
+// Everything else the admin portal manages (agreements, inspections, drivers, finance, marketing,
+// notifications, ...) is stored in `app_records` as JSON, one row per record, grouped by collection.
+// Portal configuration (company profile, policies, terms, templates, ...) lives in `app_settings`.
+// These can be moved into dedicated tables later without changing the apps.
 
 generator client {
   provider = "prisma-client-js"
@@ -114,11 +121,14 @@ model User {
   email        String   @unique
   passwordHash String   @map("password_hash")
   role         UserRole
-  branchId     String?  @map("branch_id")
-  branch       Branch?  @relation(fields: [branchId], references: [id])
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  branchId     String?   @map("branch_id")
+  branch       Branch?   @relation(fields: [branchId], references: [id])
+  /// Branch name as chosen in the portal's Settings → Branches list.
+  branchName   String?   @map("branch_name")
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@map("users")
 }
@@ -130,8 +140,10 @@ model Customer {
   firstName        String             @map("first_name")
   lastName         String             @map("last_name")
   dob              DateTime?          @db.Date
-  phone            String             @unique
-  email            String             @unique
+  /// Optional for customers added by staff; required when a customer registers in the app.
+  phone            String?            @unique
+  email            String?            @unique
+  /// Set only for customers who registered in the app and can sign in.
   passwordHash     String?            @map("password_hash")
   address          String?
   city             String?
@@ -152,6 +164,8 @@ model Customer {
   loyaltyPoints    Int                @default(0) @map("loyalty_points")
   /// 0.0 – 5.0, maintained by the business rules in later phases.
   trustRating      Decimal            @default(5.0) @map("trust_rating") @db.Decimal(2, 1)
+  /// Documents, photo flags and other profile fields shown in the apps.
+  details          Json               @default("{}")
   createdAt        DateTime           @default(now()) @map("created_at")
   updatedAt        DateTime           @updatedAt @map("updated_at")
   bookings         Booking[]
@@ -185,6 +199,8 @@ model Vehicle {
   pucCertificateNo  String?       @map("puc_certificate_no")
   pucExpiry         DateTime?     @map("puc_expiry") @db.Date
   photoUrl          String?       @map("photo_url")
+  /// GPS fix, fuel log, loan, sale, photos, documents and other fields shown in the apps.
+  details           Json          @default("{}")
   branchId          String?       @map("branch_id")
   branch            Branch?       @relation(fields: [branchId], references: [id])
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -253,6 +269,8 @@ model Booking {
   fineChargesPaise   Int?                  @map("fine_charges_paise")
   completedAt        DateTime?             @map("completed_at")
   cancelledAt        DateTime?             @map("cancelled_at")
+  /// Rental lifecycle links (agreement, inspections, driver), keyless state and display fields.
+  details            Json                  @default("{}")
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
 
@@ -260,4 +278,42 @@ model Booking {
   @@index([customerId])
   @@index([status])
   @@map("bookings")
+}
+
+// ---------------------------------------------------------------- Admin records, settings and files
+
+/// One record of an admin-managed list (agreements, inspections, drivers, finance entries, ...).
+model AppRecord {
+  collection String
+  id         String
+  data       Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@id([collection, id])
+  @@index([collection])
+  @@map("app_records")
+}
+
+/// One configuration document of the admin portal (company profile, policies, terms, templates, ...).
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_settings")
+}
+
+/// An uploaded file (vehicle document, photo, signature). The bytes live under FILE_STORAGE_DIR.
+model StoredFile {
+  id         String   @id @default(cuid())
+  name       String
+  mimeType   String   @map("mime_type")
+  size       Int
+  path       String
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("stored_files")
 }

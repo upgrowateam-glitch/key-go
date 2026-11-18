@@ -4,8 +4,8 @@ import { CheckCircle2, FileText, Plus, RefreshCw, ShieldCheck } from 'lucide-rea
 import { Badge, Button, Card, ConfirmDialog, DocumentSlot, Field, FormSheet, Grid, KeyValueGrid, Section, SimulatedNote } from '../../../components/kit';
 import { useApp } from '../../../context/AppContext';
 import { useResponsive } from '../../../hooks/useResponsive';
-import { DOCUMENT_ACCEPT, documentFileProblem, pickFile } from '../../../lib/filePicker';
-import { deleteFile, fileStoreAvailable, formatBytes, openStoredFile, putFile } from '../../../lib/fileStore';
+import { deleteFile, openFile, uploadFile } from '../../../lib/api';
+import { DOCUMENT_ACCEPT, documentFileProblem, formatBytes, pickFile } from '../../../lib/filePicker';
 import { formatDate } from '../../../lib/format';
 import { addVehicleDocument, documentsOf, FleetExtras, removeVehicleDocument, saveVehicleDocument, VehicleDocument } from '../../../services/fleet';
 import { useThemeColors, useThemedStyles } from '../../../theme';
@@ -14,8 +14,6 @@ import { makeStyles } from '../detailStyles';
 import { expiryFlag, ISO_DATE } from '../shared';
 
 type RenewKind = 'insurance' | 'puc';
-
-const fileKeyFor = (vehicleId: string, documentId: string) => `vehicle-doc/${vehicleId}/${documentId}`;
 
 export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: FleetExtras; onChanged: () => void }) {
   const { today, showToast } = useApp();
@@ -27,7 +25,6 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
   const [busyId, setBusyId] = useState<string | null>(null);
   const isSold = v.status === 'Sold';
   const docs = documentsOf(extras, v.id);
-  const canStore = fileStoreAvailable();
 
   const upload = async (doc: VehicleDocument) => {
     const file = await pickFile(DOCUMENT_ACCEPT);
@@ -39,17 +36,18 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
     }
     setBusyId(doc.id);
     try {
-      const key = fileKeyFor(v.id, doc.id);
-      await putFile(key, file);
+      const stored = await uploadFile(file);
+      const replaced = doc.file?.key;
       saveVehicleDocument(v.id, doc.id, {
         status: 'Pending',
         uploadedAt: today,
-        file: { key, name: file.name, type: file.type, size: file.size },
+        file: { key: stored.id, name: stored.name, type: stored.type, size: stored.size },
       });
+      if (replaced) deleteFile(replaced).catch(() => undefined);
       onChanged();
-      showToast(`${doc.name} stored · pending verification`);
-    } catch {
-      showToast('The file could not be stored in this browser');
+      showToast(`${doc.name} uploaded · pending verification`);
+    } catch (e) {
+      showToast(`The file could not be uploaded: ${(e as Error).message}`);
     } finally {
       setBusyId(null);
     }
@@ -58,8 +56,8 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
   const view = async (doc: VehicleDocument) => {
     if (!doc.file) return;
     try {
-      const opened = await openStoredFile(doc.file.key);
-      if (!opened) showToast('The stored file was not found in this browser. Upload it again.');
+      const opened = await openFile(doc.file.key);
+      if (!opened) showToast('The stored file was not found on the server. Upload it again.');
     } catch {
       showToast('The stored file could not be opened');
     }
@@ -132,7 +130,7 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
                   status={doc.status}
                   busy={busyId === doc.id}
                   onView={doc.file ? () => view(doc) : undefined}
-                  onUpload={isSold || !canStore ? undefined : () => upload(doc)}
+                  onUpload={isSold ? undefined : () => upload(doc)}
                   onRemove={isSold || !(doc.file || doc.custom) ? undefined : () => setRemoving(doc)}
                 />
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 }}>
@@ -150,11 +148,7 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
           })}
         </Card>
       </Section>
-      <SimulatedNote>
-        {canStore
-          ? 'Files are stored in this browser (IndexedDB) until the KeyGo server is available, so they are not visible on other devices. Insurer and RTO integrations are pending.'
-          : 'This browser does not allow file storage, so documents cannot be uploaded here. Insurer and RTO integrations are pending.'}
-      </SimulatedNote>
+      <SimulatedNote>Files are stored on the KeyGo server and visible to all staff. Insurer and RTO integrations are pending.</SimulatedNote>
 
       {renewing ? <RenewSheet v={v} kind={renewing} onClose={() => setRenewing(null)} /> : null}
       {editing ? (
@@ -190,8 +184,8 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
         message={
           removing
             ? removing.custom
-              ? `${removing.name} and its stored file will be deleted from this browser.`
-              : `The stored file for ${removing.name} will be deleted from this browser. The document slot stays and can be uploaded again.`
+              ? `${removing.name} and its stored file will be deleted.`
+              : `The stored file for ${removing.name} will be deleted. The document slot stays and can be uploaded again.`
             : undefined
         }
         confirmLabel="Remove"

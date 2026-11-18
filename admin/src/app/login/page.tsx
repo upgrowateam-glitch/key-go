@@ -3,10 +3,10 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { useRouter } from 'next/navigation';
-import { Button, Card, Field, Screen, SimulatedNote } from '../../components/kit';
+import { Button, Card, Field, Screen } from '../../components/kit';
 import { KeyGoLogo } from '../../components/ui/KeyGoLogo';
 import { useStaffSession } from '../../components/portal/PortalShell';
-import { DEMO_ACCOUNTS, DEMO_PASSWORD, signIn } from '../../services/auth';
+import { signIn } from '../../services/auth';
 import { useThemeColors } from '../../theme';
 
 export default function LoginPage() {
@@ -51,9 +51,7 @@ export default function LoginPage() {
           <Field label="Password" secureTextEntry value={password} onChangeText={setPassword} required error={tried ? passwordError : undefined} />
           {error ? <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 10 }}>{error}</Text> : null}
           <Button label={busy ? 'Signing in…' : 'Sign in'} fullWidth disabled={busy} onPress={submit} />
-          <SimulatedNote>
-            {`Demo sign-in, no server involved. Use ${DEMO_ACCOUNTS.map((a) => a.email).join(', ')} with password ${DEMO_PASSWORD}.`}
-          </SimulatedNote>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 12 }}>Use the staff account an Owner or Admin created for you. Forgot your password? Ask them to reset it in Settings → Users & roles.</Text>
         </Card>
       </Screen>
     </View>

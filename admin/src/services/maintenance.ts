@@ -1,29 +1,22 @@
-import { mockRequest } from './mockClient';
-import { DEMO_TODAY } from '../data/mockData';
+import { newId } from '../config/defaults';
+import { serverDoc } from '../lib/serverState';
+import { TODAY } from '../lib/today';
 import { daysBetween } from '../lib/format';
 import type { MaintenanceReminder } from '../types';
 
-/** AppContext has no way to add a reminder, so scheduled services added here live in this mock store. */
-let scheduled: MaintenanceReminder[] = [];
+/** Services scheduled from the Maintenance section, stored on the server. */
+const scheduledDoc = serverDoc<MaintenanceReminder[]>('maintenance.scheduled', []);
 
 export const statusForDueDate = (dueDate: string): MaintenanceReminder['status'] => {
-  const d = daysBetween(DEMO_TODAY, dueDate);
+  const d = daysBetween(TODAY, dueDate);
   return d < 0 ? 'Overdue' : d <= 30 ? 'Due soon' : 'Scheduled';
 };
 
-const snapshot = () => scheduled;
-export const loadScheduledServices = () => mockRequest(snapshot);
+export const loadScheduledServices = async () => scheduledDoc.get();
 
 export const scheduleService = (input: Pick<MaintenanceReminder, 'vehicleId' | 'type' | 'dueDate' | 'dueKm'>) =>
-  mockRequest(() => {
-    scheduled = [{ ...input, id: `SCH-${Date.now().toString(36).toUpperCase()}`, status: statusForDueDate(input.dueDate) }, ...scheduled];
-    return snapshot();
-  });
+  scheduledDoc.set([{ ...input, id: newId('SCH'), status: statusForDueDate(input.dueDate) }, ...scheduledDoc.get()]);
 
-export const completeScheduledService = (id: string) =>
-  mockRequest(() => {
-    scheduled = scheduled.map((r) => (r.id === id ? { ...r, status: 'Done' } : r));
-    return snapshot();
-  });
+export const completeScheduledService = (id: string) => scheduledDoc.set(scheduledDoc.get().map((r) => (r.id === id ? { ...r, status: 'Done' as const } : r)));
 
 export const isScheduledService = (id: string) => id.startsWith('SCH-');

@@ -12,6 +12,6 @@ Car rental platform: a customer mobile app, an admin web portal and a planned ba
 Each app has its own `package.json`, dependencies and configuration. Install and run each one from its own folder;
 there is nothing to install at the root.
 
-Both frontends currently use mock data. Start with
+Both apps use the KeyGo server and its database (live at https://keygo-api.upgrowa.cloud). Start with
 [`Documentation/setup-guide.md`](Documentation/setup-guide.md) and
 [`Documentation/project-overview.md`](Documentation/project-overview.md).

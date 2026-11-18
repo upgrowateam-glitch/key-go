@@ -2,17 +2,15 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Card, Field, Screen, SimulatedNote } from '../components/kit';
+import { Button, Card, Field, Screen } from '../components/kit';
 import { KeyGoLogo } from '../components/ui/KeyGoLogo';
-import { useApp } from '../context/AppContext';
-import { DEMO_EMAIL, DEMO_PASSWORD, signIn } from '../services/auth';
+import { signIn } from '../services/auth';
 import { useThemeColors } from '../theme';
 
 export default function LoginScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { customers } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tried, setTried] = useState(false);
@@ -28,7 +26,7 @@ export default function LoginScreen() {
     if (emailError || passwordError) return;
     setBusy(true);
     try {
-      await signIn(email, password, customers);
+      await signIn(email, password);
       router.replace('/(tabs)' as any);
     } catch (e) {
       setError((e as Error).message);
@@ -55,7 +53,6 @@ export default function LoginScreen() {
               Create an account
             </Link>
           </Text>
-          <SimulatedNote>{`Demo sign-in, no server involved. Try ${DEMO_EMAIL} with password ${DEMO_PASSWORD}.`}</SimulatedNote>
         </Card>
       </Screen>
     </View>

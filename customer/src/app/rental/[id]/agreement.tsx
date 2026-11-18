@@ -22,7 +22,6 @@ import {
   StatusBadge,
 } from '../../../components/kit';
 import { AgreementFine, Booking } from '../../../types';
-import { STANDARD_FINES } from '../../../services/workspace';
 import { formatDate, formatINR } from '../../../lib/format';
 
 const TERMS = [
@@ -40,7 +39,7 @@ export default function AgreementScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = decodeURIComponent(id ?? '');
-  const { bookings, agreements, signAgreement, showToast, currentCustomerId } = useApp();
+  const { bookings, agreements, signAgreement, showToast, currentCustomerId, standardFines } = useApp();
   const booking = bookings.find((b) => b.id === bookingId && b.customerId === currentCustomerId);
   const existing = agreements.find((a) => a.bookingId === bookingId);
 
@@ -59,7 +58,7 @@ export default function AgreementScreen() {
     );
   }
 
-  const fines = existing?.fines ?? STANDARD_FINES;
+  const fines = existing?.fines ?? standardFines;
   const canSign = !existing && signature.length > 10 && accepted && depositAccepted && signer.trim().length > 1;
 
   const doc = existing

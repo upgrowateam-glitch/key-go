@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, Min, validateSync } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min, MinLength, validateSync } from 'class-validator';
 
 /** Environment variables the server needs at startup. Missing or malformed values stop the boot with a clear message. */
 class Env {
@@ -11,6 +11,21 @@ class Env {
   @Min(1)
   @Max(65535)
   PORT?: number;
+
+  /** Signs sign-in tokens. A long random value; changing it signs everyone out. */
+  @IsString()
+  @MinLength(16)
+  JWT_ACCESS_SECRET: string;
+
+  /** How long a sign-in lasts, e.g. 30d. */
+  @IsOptional()
+  @IsString()
+  JWT_ACCESS_TTL?: string;
+
+  /** Encrypts Aadhaar numbers at rest. Defaults to JWT_ACCESS_SECRET; keep it stable once set. */
+  @IsOptional()
+  @IsString()
+  DATA_ENCRYPTION_KEY?: string;
 
   @IsOptional()
   @IsString()

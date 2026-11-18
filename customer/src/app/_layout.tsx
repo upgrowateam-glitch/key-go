@@ -6,8 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Button, EmptyState } from '../components/kit';
 import { AppUpdatePrompt } from '../components/ui/AppUpdatePrompt';
 import { KeyGoToast } from '../components/ui/KeyGoToast';
-import { AppProvider } from '../context/AppContext';
-import { registeredCustomers, useAuth } from '../services/auth';
+import { AppProvider, SignedOutProvider } from '../context/AppContext';
+import { useAuth } from '../services/auth';
 import { loadWorkspace, type Workspace } from '../services/workspace';
 import { ThemeProvider, useThemeColors } from '../theme';
 
@@ -36,19 +36,34 @@ function ThemedStack() {
   );
 }
 
+/** Signed in: loads the customer's data from the KeyGo server. Signed out: only the sign-in screens are needed. */
 function Workspace_() {
   const colors = useThemeColors();
-  const { customerId } = useAuth();
+  const { token, customerId } = useAuth();
+  // The web build first renders as signed out and only then reads the saved sign-in. Waiting for that keeps a
+  // deep link (a trip, the profile) from being redirected to sign-in and back to Home.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
+  if (!ready) return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  if (!token || !customerId) {
+    return (
+      <SignedOutProvider>
+        <ThemedStack />
+      </SignedOutProvider>
+    );
+  }
+  return <SignedIn key={customerId} />;
+}
+
+function SignedIn() {
+  const colors = useThemeColors();
   const [workspace, setWorkspace] = useState<Workspace>();
   const [error, setError] = useState('');
 
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    loadWorkspace().then(
-      (w) => setWorkspace({ ...w, customers: [...registeredCustomers(), ...w.customers] }),
-      (e: Error) => setError(e.message)
-    );
+    loadWorkspace().then(setWorkspace, (e: Error) => setError(e.message));
   }, [attempt]);
 
   const load = () => {
@@ -64,7 +79,7 @@ function Workspace_() {
     );
   }
   return (
-    <AppProvider seed={workspace} customerId={customerId ?? ''}>
+    <AppProvider seed={workspace}>
       <ThemedStack />
     </AppProvider>
   );

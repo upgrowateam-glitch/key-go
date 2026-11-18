@@ -1,5 +1,5 @@
 import { Booking } from '../types';
-import { DEMO_TODAY } from '../data/mockData';
+import { TODAY } from './today';
 import { daysBetween } from './format';
 
 /** The rental workflow, in order. Each step maps to a screen in the app. */
@@ -49,17 +49,17 @@ export function nextAction(b: Booking): { label: string; href: string } | null {
 }
 
 /** True when an active rental is past its return date. */
-export function isOverdue(b: Booking, today = DEMO_TODAY) {
+export function isOverdue(b: Booking, today = TODAY) {
   return b.status === 'Active' && daysBetween(b.returnDate, today) > 0;
 }
 
 /** Days of the rental elapsed so far (for active rentals). */
-export function elapsedDays(b: Booking, today = DEMO_TODAY) {
+export function elapsedDays(b: Booking, today = TODAY) {
   return Math.max(0, Math.min(b.days + 30, daysBetween(b.pickupDate, today)));
 }
 
 /** Whether the T-2 pickup reminder is scheduled/sent for a booking. */
-export function reminderState(b: Booking, today = DEMO_TODAY): 'sent' | 'scheduled' | 'none' {
+export function reminderState(b: Booking, today = TODAY): 'sent' | 'scheduled' | 'none' {
   if (!b.reminderScheduledFor || b.status === 'Cancelled' || b.status === 'Completed') {
     return b.reminderSent ? 'sent' : 'none';
   }

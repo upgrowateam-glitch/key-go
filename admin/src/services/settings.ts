@@ -1,4 +1,5 @@
-import { DEMO_ACCOUNTS, type StaffRole } from './auth';
+import { api } from '../lib/api';
+import type { StaffRole } from './auth';
 import { createStore } from '../features/notifications/listControls';
 import { PRICING_RULES } from '../lib/pricing';
 import type { RentalTerm, VehicleType } from '../types';
@@ -15,16 +16,16 @@ export interface CompanyProfile {
   supportHours: string;
 }
 
-export const companyStore = createStore<CompanyProfile>({
+export const companyStore = createStore<CompanyProfile>('settings.company', {
   name: 'KeyGo',
-  legalName: 'KeyGo Mobility Private Limited',
-  gstin: '29AAKCK1234F1Z5',
-  pan: 'AAKCK1234F',
-  phone: '+91 80 4000 1234',
-  email: 'hello@keygo.in',
-  website: 'https://www.keygo.in',
-  address: '12, Residency Road, Bengaluru, Karnataka 560025',
-  supportHours: '7:00 AM to 10:00 PM, all days',
+  legalName: '',
+  gstin: '',
+  pan: '',
+  phone: '',
+  email: '',
+  website: '',
+  address: '',
+  supportHours: '',
 });
 
 export interface Branch {
@@ -37,12 +38,7 @@ export interface Branch {
   active: boolean;
 }
 
-export const branchesStore = createStore<Branch[]>([
-  { id: 'BR-1', name: 'Residency Road (HQ)', city: 'Bengaluru', address: '12, Residency Road, Bengaluru 560025', phone: '+91 80 4000 1234', manager: 'Arjun Das', active: true },
-  { id: 'BR-2', name: 'Kempegowda Airport', city: 'Bengaluru', address: 'Terminal 2 Arrivals, KIAL, Bengaluru 560300', phone: '+91 80 4000 1250', manager: 'Sneha Rao', active: true },
-  { id: 'BR-3', name: 'Andheri East', city: 'Mumbai', address: 'Marol Naka, Andheri East, Mumbai 400059', phone: '+91 22 4100 2200', manager: 'Vikram Shetty', active: true },
-  { id: 'BR-4', name: 'Aerocity', city: 'New Delhi', address: 'Aerocity Hospitality District, New Delhi 110037', phone: '+91 11 4200 3300', manager: 'Neha Kapoor', active: false },
-]);
+export const branchesStore = createStore<Branch[]>('settings.branches', []);
 
 export interface PortalUser {
   id: string;
@@ -54,14 +50,12 @@ export interface PortalUser {
   lastActive: string;
 }
 
-export const usersStore = createStore<PortalUser[]>([
-  ...DEMO_ACCOUNTS.map((a, i) => ({ id: `USR-${i + 1}`, name: a.name, email: a.email, role: a.role, branch: 'Residency Road (HQ)', active: true, lastActive: 'Today' })),
-  { id: 'USR-5', name: 'Vikram Shetty', email: 'vikram@keygo.in', role: 'Manager', branch: 'Andheri East', active: true, lastActive: 'Yesterday' },
-  { id: 'USR-6', name: 'Neha Kapoor', email: 'neha@keygo.in', role: 'Manager', branch: 'Aerocity', active: false, lastActive: '12 Aug' },
-  { id: 'USR-7', name: 'Farhan Ali', email: 'farhan@keygo.in', role: 'Staff', branch: 'Kempegowda Airport', active: true, lastActive: 'Today' },
-  { id: 'USR-8', name: 'Divya Menon', email: 'divya@keygo.in', role: 'Staff', branch: 'Kempegowda Airport', active: true, lastActive: 'Today' },
-  { id: 'USR-9', name: 'Kiran Joshi', email: 'kiran@keygo.in', role: 'Staff', branch: 'Andheri East', active: true, lastActive: '2 days ago' },
-]);
+/** Staff accounts live in the users table on the server, so they can sign in. Owners and Admins manage them. */
+export const fetchUsers = () => api<PortalUser[]>('/admin/users');
+export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password: string }) =>
+  api<PortalUser>('/admin/users', { method: 'POST', body: input });
+export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active'>> & { password?: string }) =>
+  api<PortalUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
 
 export interface PricingSettings {
   termDiscount: Record<RentalTerm, number>;
@@ -70,7 +64,7 @@ export interface PricingSettings {
   minDays: Record<RentalTerm, number>;
 }
 
-export const pricingStore = createStore<PricingSettings>({
+export const pricingStore = createStore<PricingSettings>('settings.pricing', {
   termDiscount: { ...PRICING_RULES.termDiscount },
   taxRate: PRICING_RULES.taxRate,
   depositByCategory: { ...PRICING_RULES.depositByCategory },
@@ -93,7 +87,7 @@ export interface BookingPolicies {
   allowOutstation: boolean;
 }
 
-export const policiesStore = createStore<BookingPolicies>({
+export const policiesStore = createStore<BookingPolicies>('settings.policies', {
   minDriverAge: '21',
   minAdvanceHours: '4',
   freeCancelHours: '24',
@@ -125,7 +119,7 @@ export interface PaymentSettings {
   refundDays: string;
 }
 
-export const paymentStore = createStore<PaymentSettings>({
+export const paymentStore = createStore<PaymentSettings>('settings.payments', {
   cash: true,
   upi: true,
   card: true,
@@ -133,10 +127,10 @@ export const paymentStore = createStore<PaymentSettings>({
   gateway: 'Razorpay',
   merchantId: '',
   gatewayConfigured: false,
-  upiId: 'keygo@okhdfcbank',
-  accountName: 'KeyGo Mobility Private Limited',
-  accountNumber: '50200012345678',
-  ifsc: 'HDFC0001234',
+  upiId: '',
+  accountName: '',
+  accountNumber: '',
+  ifsc: '',
   invoicePrefix: 'KG-INV-',
   refundDays: '3',
 });
@@ -152,13 +146,13 @@ export interface NotificationPreferences {
   dailyDigest: boolean;
 }
 
-export const notificationPrefsStore = createStore<NotificationPreferences>({
+export const notificationPrefsStore = createStore<NotificationPreferences>('settings.notificationPreferences', {
   quietHours: true,
   quietStart: '22:00',
   quietEnd: '07:00',
-  opsEmail: 'ops@keygo.in',
-  escalationPhone: '+91 98450 11223',
-  accountsEmail: 'accounts@keygo.in',
+  opsEmail: '',
+  escalationPhone: '',
+  accountsEmail: '',
   customerOptOut: true,
   dailyDigest: true,
 });
@@ -177,9 +171,10 @@ export interface TermsDocument {
   clauses: TermsClause[];
 }
 
-export const termsStore = createStore<TermsDocument>({
-  version: 3,
-  publishedOn: '2026-08-01',
+/** Starting terms; staff edit and publish them, and the published version is saved. */
+export const termsStore = createStore<TermsDocument>('settings.terms', {
+  version: 1,
+  publishedOn: '',
   dirty: false,
   clauses: [
     { id: 'TC-1', title: 'Driver eligibility', body: 'The driver must hold a valid driving licence and meet the minimum age in the booking policy.' },

@@ -4,9 +4,9 @@ KeyGo is a car rental business platform made of two separate frontends and a pla
 
 | Part | Folder | Technology | Status |
 |---|---|---|---|
-| Customer mobile app | `Customer/` | Expo SDK 57, React Native 0.86, Expo Router, TypeScript | Frontend complete, mock data |
-| Admin web portal | `Admin/` | Next.js 16 (webpack), React 19, react-native-web, TypeScript | Frontend complete, mock data |
-| Backend API | `Server/` | NestJS, PostgreSQL, Prisma (planned) | Not started |
+| Customer mobile app | `Customer/` | Expo SDK 57, React Native 0.86, Expo Router, TypeScript | Connected to the server |
+| Admin web portal | `Admin/` | Next.js 16 (webpack), React 19, react-native-web, TypeScript | Connected to the server |
+| Backend API | `Server/` | NestJS, PostgreSQL 18, Prisma | Live: auth, fleet, bookings, records, settings, files |
 
 ```text
 Customer (Expo app) ──┐
@@ -24,7 +24,8 @@ For customers only. It has no admin or staff screens.
   booking details, GPS tracking of an active rental.
 - **Home entrance:** two Google Flow videos play automatically once per app session (road, then showroom),
   using `expo-video`.
-- **Prices:** every price comes from one file, `Customer/src/data/pricing.ts`, marked as temporary mock pricing.
+- **Prices:** each vehicle's price list is stored on the server and edited in the admin portal; the server works out
+  the price of every booking.
 
 ## Admin portal
 
@@ -36,11 +37,14 @@ Notifications · Marketing & Loyalty · Settings
 
 Sections are role-based (`Admin/src/config/navigation.ts`). Tabs are synced to the URL (`?tab=`).
 
-## Current limitations (frontend phase)
+## Current limitations
 
-- All data is mock data and most edits reset on reload. There is no shared state between the two apps.
-- Sign-in, roles, double-booking prevention, payments, GPS, FASTag, ID and face verification, WhatsApp/SMS,
-  e-signatures and PDFs are simulated and labelled as such in the UI.
-- The two apps keep separate copies of the UI kit, theme, types and mock data (`src/components/kit`, `src/theme`,
-  `src/types`, `src/data`). This is deliberate for now; a shared package is a later decision.
-- The Admin portal still uses the original six-vehicle mock fleet; the Customer app uses the updated seven-vehicle fleet.
+- Both apps read and write the KeyGo server and its PostgreSQL database. Staff and customers sign in with real
+  accounts; roles and double-booking prevention are enforced by the server.
+- Admin-managed lists other than vehicles, bookings and customers (agreements, inspections, finance, marketing,
+  notifications, ...) are stored as JSON records and settings documents. Two staff editing the same settings page
+  at the same moment: the last save wins.
+- Still simulated and labelled in the UI: online payments, GPS, FASTag, ID and face verification, WhatsApp/SMS,
+  e-signature delivery, PDFs and customer document uploads in the app. Vehicle documents are real uploads.
+- The two apps keep separate copies of the UI kit, theme and types (`src/components/kit`, `src/theme`, `src/types`).
+  This is deliberate for now; a shared package is a later decision.

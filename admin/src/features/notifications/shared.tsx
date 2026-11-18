@@ -32,14 +32,14 @@ export const CHANNEL_LABELS: Record<ChannelType, string> = {
   emi: 'EMI',
 };
 
-/** Sample message templates (placeholders already filled with sample data). */
+/** Test message bodies, written as previews; real messages use the booking's own details. */
 export const TEMPLATES: Record<ChannelType, string> = {
-  booking: 'Hi Suresh, your KeyGo booking KG-6299 (Urban SUV) is confirmed. Pickup on 28 Sep at 08:00 AM. Please carry your driving licence. Reply HELP for support.',
-  return: 'Hi Rahul, a reminder that your Sport Coupé (KG-7104) is due back today at 09:00 PM. Late returns may attract a fine as per your agreement.',
-  insurance: 'Fleet alert: insurance policy INS-ROYAL-9910 for KA 04 LX 1007 expires on 08 Oct. Please renew to keep the vehicle rentable.',
-  emission: 'Fleet alert: PUC certificate for KA 04 LX 1007 expired on 20 Sep. Vehicle should not be dispatched until renewed.',
-  service: 'Fleet alert: Executive Sedan (KA 03 MS 2210) periodic service due at 45,000 km or by 12 Oct.',
-  emi: 'Accounts: 4 loan EMIs totalling Rs 1,54,600 are due on 01 Oct. Please ensure sufficient balance.',
+  booking: 'Hi {customer}, your KeyGo booking {booking_id} ({vehicle}) is confirmed. Pickup on {date} at {time}. Please carry your driving licence. Reply HELP for support.',
+  return: 'Hi {customer}, a reminder that your {vehicle} ({booking_id}) is due back on {date} at {time}. Late returns may attract a fine as per your agreement.',
+  insurance: 'Fleet alert: insurance policy {policy_no} for {vehicle_no} expires on {date}. Please renew to keep the vehicle rentable.',
+  emission: 'Fleet alert: PUC certificate for {vehicle_no} expires on {date}. Do not dispatch the vehicle after expiry.',
+  service: 'Fleet alert: {vehicle} ({vehicle_no}) periodic service is due by {date}.',
+  emi: 'Accounts: loan EMIs totalling {amount} are due on {date}. Please ensure sufficient balance.',
 };
 
 export const MESSAGE_STATUS_TONE: Record<MessageLogEntry['status'], Tone> = {

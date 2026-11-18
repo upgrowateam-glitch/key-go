@@ -7,12 +7,12 @@ import { useThemedStyles, type ThemeColors } from '../../theme';
 import { CarKind, Vehicle, VehicleType } from '../../types';
 import { ISO_DATE, num } from './shared';
 
-const VEHICLE_TYPES = ['SUV', 'Sedan', 'Electric', 'Luxury'] as const;
+const VEHICLE_TYPES = ['Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
 const FUEL_TYPES = ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'CNG'] as const;
 type FuelType = (typeof FUEL_TYPES)[number];
 const TRANSMISSIONS = ['Auto', 'Manual'] as const;
 
-const KIND_BY_TYPE: Record<VehicleType, CarKind> = { SUV: 'suv', Sedan: 'sedan', Electric: 'ev', Luxury: 'sport' };
+const KIND_BY_TYPE: Record<VehicleType, CarKind> = { Hatchback: 'sedan', SUV: 'suv', MUV: 'suv', Sedan: 'sedan', Electric: 'ev', Luxury: 'sport' };
 /** Paint colour is vehicle content (not theme); new vehicles start with a neutral graphite until edited. */
 const DEFAULT_PAINT = '#5B6770';
 /** New vehicles are parked at the main hub until the GPS device reports (simulated). */

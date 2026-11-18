@@ -1,13 +1,17 @@
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService);
+
+  // Signatures and portal settings documents can be larger than the 100 KB default
+  app.useBodyParser('json', { limit: '5mb' });
 
   // Browser clients: the admin portal and Expo web. Native apps are not subject to CORS.
   const origins = (config.get<string>('CORS_ORIGINS') ?? '')

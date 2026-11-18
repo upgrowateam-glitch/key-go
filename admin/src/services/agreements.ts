@@ -1,5 +1,6 @@
-import { mockRequest } from './mockClient';
-import { DEMO_TODAY } from '../data/mockData';
+import { newId } from '../config/defaults';
+import { serverDoc } from '../lib/serverState';
+import { TODAY } from '../lib/today';
 
 export type TermCategory = 'Usage' | 'Charges' | 'Liability' | 'Returns';
 export interface TermClause {
@@ -75,189 +76,188 @@ export interface AgreementActivity {
   text: string;
 }
 
-// Mock server state: survives tab switches, resets on reload.
-let termsVersion = 3;
-let terms: TermClause[] = [
-  { id: 'tc-1', category: 'Returns', title: 'Return condition', body: 'The vehicle must be returned at the agreed date, time and location with the same fuel/charge level as at pickup.', required: true, active: true, updatedOn: '2026-06-02' },
-  { id: 'tc-2', category: 'Charges', title: 'FASTag tolls', body: 'FASTag toll charges incurred during the rental are billed to the customer and may be deducted from the security deposit.', required: false, active: true, updatedOn: '2026-06-02' },
-  { id: 'tc-3', category: 'Liability', title: 'Traffic violations', body: 'The customer is responsible for traffic violations and challans during the rental period.', required: true, active: true, updatedOn: '2026-06-02' },
-  { id: 'tc-4', category: 'Usage', title: 'Permitted use', body: 'The vehicle must not be used for racing, towing, commercial ride-hailing or driven by anyone not listed on this agreement.', required: true, active: true, updatedOn: '2026-06-02' },
-  { id: 'tc-5', category: 'Liability', title: 'Damage assessment', body: 'Damage beyond the pickup inspection record is assessed at return and charged as per the inspection report.', required: true, active: true, updatedOn: '2026-06-02' },
-  { id: 'tc-6', category: 'Charges', title: 'Deposit refund', body: 'The security deposit is refunded within 48 hours of return after deducting applicable charges.', required: false, active: true, updatedOn: '2026-08-19' },
-  { id: 'tc-7', category: 'Usage', title: 'Lawful driving', body: 'Speed limits and all applicable laws of India must be followed at all times.', required: false, active: true, updatedOn: '2026-06-02' },
-];
+// ---------------------------------------------------------------- server documents
 
-let penalties: PenaltyRule[] = [
+/** Clauses printed on every agreement; staff edit them in Rental Agreements → Terms. */
+const termsDoc = serverDoc<{ version: number; clauses: TermClause[] }>('agreements.terms', {
+  version: 1,
+  clauses: [
+    { id: 'tc-1', category: 'Returns', title: 'Return condition', body: 'The vehicle must be returned at the agreed date, time and location with the same fuel/charge level as at pickup.', required: true, active: true, updatedOn: '' },
+    { id: 'tc-2', category: 'Charges', title: 'FASTag tolls', body: 'FASTag toll charges incurred during the rental are billed to the customer and may be deducted from the security deposit.', required: false, active: true, updatedOn: '' },
+    { id: 'tc-3', category: 'Liability', title: 'Traffic violations', body: 'The customer is responsible for traffic violations and challans during the rental period.', required: true, active: true, updatedOn: '' },
+    { id: 'tc-4', category: 'Usage', title: 'Permitted use', body: 'The vehicle must not be used for racing, towing, commercial ride-hailing or driven by anyone not listed on this agreement.', required: true, active: true, updatedOn: '' },
+    { id: 'tc-5', category: 'Liability', title: 'Damage assessment', body: 'Damage beyond the pickup inspection record is assessed at return and charged as per the inspection report.', required: true, active: true, updatedOn: '' },
+    { id: 'tc-6', category: 'Charges', title: 'Deposit refund', body: 'The security deposit is refunded within 48 hours of return after deducting applicable charges.', required: false, active: true, updatedOn: '' },
+    { id: 'tc-7', category: 'Usage', title: 'Lawful driving', body: 'Speed limits and all applicable laws of India must be followed at all times.', required: false, active: true, updatedOn: '' },
+  ],
+});
+
+/** Charges listed on every agreement. The server reads the same document when a customer signs in the app. */
+const penaltiesDoc = serverDoc<PenaltyRule[]>('agreements.penalties', [
   { id: 'f1', label: 'Late return (per hour)', amount: 500, basis: 'Per hour', active: true },
   { id: 'f2', label: 'Smoking / deep cleaning', amount: 2000, basis: 'Flat', active: true },
   { id: 'f3', label: 'Lost key or key fob', amount: 5000, basis: 'Flat', active: true },
   { id: 'f4', label: 'Traffic challan admin fee (plus actual fine)', amount: 250, basis: 'Actual + fee', active: true },
-];
+]);
 
-let assessed: AssessedFine[] = [
-  { id: 'FA-102', agreementId: 'AGR-2026-002', label: 'Late return (per hour)', amount: 1500, date: '2026-09-25', status: 'Pending', note: '3 hours past the agreed return time so far' },
-  { id: 'FA-101', agreementId: 'AGR-2026-000', label: 'Smoking / deep cleaning', amount: 2000, date: '2026-09-15', status: 'Waived', note: 'Waived after the cabin passed inspection' },
-];
-
-let discountRules: DiscountRule[] = [
+const discountRulesDoc = serverDoc<DiscountRule[]>('agreements.discountRules', [
   { id: 'dr-1', name: 'Weekly rental', kind: 'Percent', value: 10, appliesTo: 'Rentals of 7 days or more', active: true },
   { id: 'dr-2', name: 'Monthly rental', kind: 'Percent', value: 20, appliesTo: 'Rentals of 30 days or more', active: true },
-  { id: 'dr-3', name: 'Corporate goodwill', kind: 'Flat', value: 1000, appliesTo: 'Corporate accounts', active: false },
-];
+]);
 
-let applied: AppliedDiscount[] = [];
+/** Money and paperwork recorded against agreements. */
+interface Ledger {
+  assessed: AssessedFine[];
+  applied: AppliedDiscount[];
+  deposits: DepositEntry[];
+  esign: ESignRequest[];
+  activity: AgreementActivity[];
+}
+const ledgerDoc = serverDoc<Ledger>('agreements.ledger', { assessed: [], applied: [], deposits: [], esign: [], activity: [] });
 
-let deposits: DepositEntry[] = [
-  { id: 'DEP-11', agreementId: 'AGR-2026-000', kind: 'Deduction', amount: 340, reason: 'FASTag toll charges', date: '2026-09-15' },
-  { id: 'DEP-12', agreementId: 'AGR-2026-000', kind: 'Refund', amount: 4660, reason: 'Balance refunded at settlement', date: '2026-09-16' },
-];
-
-let esign: ESignRequest[] = [];
-let activity: AgreementActivity[] = [];
-
-const newId = (prefix: string) => `${prefix}-${Date.now().toString(36).toUpperCase()}`;
-
-const log = (agreementId: string, text: string) => {
-  activity = [{ id: newId('ACT') + activity.length, agreementId, date: DEMO_TODAY, text }, ...activity];
-};
+const ledger = () => ledgerDoc.get();
+const saveLedger = (patch: Partial<Ledger>) => ledgerDoc.set({ ...ledger(), ...patch });
+const withActivity = (agreementId: string, text: string): Pick<Ledger, 'activity'> => ({
+  activity: [{ id: newId('ACT'), agreementId, date: TODAY, text }, ...ledger().activity],
+});
 
 // ---------------------------------------------------------------- Used synchronously by the signing screen
 
-export const activeTerms = () => terms.filter((t) => t.active);
-export const activePenalties = () => penalties.filter((p) => p.active);
+export const activeTerms = () => termsDoc.get().clauses.filter((t) => t.active);
+export const activePenalties = () => penaltiesDoc.get().filter((p) => p.active);
 
 // ---------------------------------------------------------------- Terms
 
-const termsSnapshot = () => ({ clauses: terms, version: termsVersion });
-export const loadTerms = () => mockRequest(termsSnapshot);
+const termsSnapshot = () => termsDoc.get();
+export const loadTerms = async () => termsSnapshot();
 
-export const saveTerm = (input: Pick<TermClause, 'title' | 'body' | 'category' | 'required'>, id?: string) =>
-  mockRequest(() => {
-    termsVersion += 1;
-    terms = id
-      ? terms.map((t) => (t.id === id ? { ...t, ...input, active: input.required ? true : t.active, updatedOn: DEMO_TODAY } : t))
-      : [...terms, { ...input, id: newId('tc'), active: true, updatedOn: DEMO_TODAY }];
-    return termsSnapshot();
-  });
+const saveClauses = async (clauses: TermClause[]) => {
+  await termsDoc.set({ version: termsDoc.get().version + 1, clauses });
+  return termsSnapshot();
+};
 
-export const setTermActive = (id: string, active: boolean) =>
-  mockRequest(() => {
-    termsVersion += 1;
-    terms = terms.map((t) => (t.id === id ? { ...t, active, updatedOn: DEMO_TODAY } : t));
-    return termsSnapshot();
-  });
+export const saveTerm = (input: Pick<TermClause, 'title' | 'body' | 'category' | 'required'>, id?: string) => {
+  const clauses = termsDoc.get().clauses;
+  return saveClauses(
+    id
+      ? clauses.map((t) => (t.id === id ? { ...t, ...input, active: input.required ? true : t.active, updatedOn: TODAY } : t))
+      : [...clauses, { ...input, id: newId('tc'), active: true, updatedOn: TODAY }]
+  );
+};
 
-export const removeTerm = (id: string) =>
-  mockRequest(() => {
-    termsVersion += 1;
-    terms = terms.filter((t) => t.id !== id);
-    return termsSnapshot();
-  });
+export const setTermActive = (id: string, active: boolean) => saveClauses(termsDoc.get().clauses.map((t) => (t.id === id ? { ...t, active, updatedOn: TODAY } : t)));
+
+export const removeTerm = (id: string) => saveClauses(termsDoc.get().clauses.filter((t) => t.id !== id));
 
 // ---------------------------------------------------------------- Deposits & discounts
 
-const moneySnapshot = () => ({ deposits, applied, rules: discountRules });
-export const loadDepositsAndDiscounts = () => mockRequest(moneySnapshot);
+const moneySnapshot = () => ({ deposits: ledger().deposits, applied: ledger().applied, rules: discountRulesDoc.get() });
+export const loadDepositsAndDiscounts = async () => moneySnapshot();
 
-export const addDepositEntry = (input: Omit<DepositEntry, 'id' | 'date'>) =>
-  mockRequest(() => {
-    deposits = [{ ...input, id: newId('DEP'), date: DEMO_TODAY }, ...deposits];
-    log(input.agreementId, `Deposit ${input.kind.toLowerCase()} of ₹${input.amount.toLocaleString('en-IN')}: ${input.reason}`);
-    return moneySnapshot();
+export const addDepositEntry = async (input: Omit<DepositEntry, 'id' | 'date'>) => {
+  await saveLedger({
+    deposits: [{ ...input, id: newId('DEP'), date: TODAY }, ...ledger().deposits],
+    ...withActivity(input.agreementId, `Deposit ${input.kind.toLowerCase()} of ₹${input.amount.toLocaleString('en-IN')}: ${input.reason}`),
   });
+  return moneySnapshot();
+};
 
-export const applyDiscount = (input: Omit<AppliedDiscount, 'id' | 'date'>) =>
-  mockRequest(() => {
-    applied = [{ ...input, id: newId('DIS'), date: DEMO_TODAY }, ...applied];
-    log(input.agreementId, `Discount of ₹${input.amount.toLocaleString('en-IN')} applied: ${input.reason}`);
-    return moneySnapshot();
+export const applyDiscount = async (input: Omit<AppliedDiscount, 'id' | 'date'>) => {
+  await saveLedger({
+    applied: [{ ...input, id: newId('DIS'), date: TODAY }, ...ledger().applied],
+    ...withActivity(input.agreementId, `Discount of ₹${input.amount.toLocaleString('en-IN')} applied: ${input.reason}`),
   });
+  return moneySnapshot();
+};
 
-export const removeAppliedDiscount = (id: string) =>
-  mockRequest(() => {
-    const d = applied.find((x) => x.id === id);
-    applied = applied.filter((x) => x.id !== id);
-    if (d) log(d.agreementId, `Discount of ₹${d.amount.toLocaleString('en-IN')} removed`);
-    return moneySnapshot();
+export const removeAppliedDiscount = async (id: string) => {
+  const d = ledger().applied.find((x) => x.id === id);
+  await saveLedger({
+    applied: ledger().applied.filter((x) => x.id !== id),
+    ...(d ? withActivity(d.agreementId, `Discount of ₹${d.amount.toLocaleString('en-IN')} removed`) : {}),
   });
+  return moneySnapshot();
+};
 
-export const saveDiscountRule = (input: Omit<DiscountRule, 'id' | 'active'>, id?: string) =>
-  mockRequest(() => {
-    discountRules = id ? discountRules.map((r) => (r.id === id ? { ...r, ...input } : r)) : [...discountRules, { ...input, id: newId('dr'), active: true }];
-    return moneySnapshot();
-  });
+export const saveDiscountRule = async (input: Omit<DiscountRule, 'id' | 'active'>, id?: string) => {
+  const rules = discountRulesDoc.get();
+  await discountRulesDoc.set(id ? rules.map((r) => (r.id === id ? { ...r, ...input } : r)) : [...rules, { ...input, id: newId('dr'), active: true }]);
+  return moneySnapshot();
+};
 
-export const setDiscountRuleActive = (id: string, active: boolean) =>
-  mockRequest(() => {
-    discountRules = discountRules.map((r) => (r.id === id ? { ...r, active } : r));
-    return moneySnapshot();
-  });
+export const setDiscountRuleActive = async (id: string, active: boolean) => {
+  await discountRulesDoc.set(discountRulesDoc.get().map((r) => (r.id === id ? { ...r, active } : r)));
+  return moneySnapshot();
+};
 
-export const removeDiscountRule = (id: string) =>
-  mockRequest(() => {
-    discountRules = discountRules.filter((r) => r.id !== id);
-    return moneySnapshot();
-  });
+export const removeDiscountRule = async (id: string) => {
+  await discountRulesDoc.set(discountRulesDoc.get().filter((r) => r.id !== id));
+  return moneySnapshot();
+};
 
 // ---------------------------------------------------------------- Fines
 
-const finesSnapshot = () => ({ rules: penalties, assessed });
-export const loadFines = () => mockRequest(finesSnapshot);
+const finesSnapshot = () => ({ rules: penaltiesDoc.get(), assessed: ledger().assessed });
+export const loadFines = async () => finesSnapshot();
 
-export const savePenalty = (input: Pick<PenaltyRule, 'label' | 'amount' | 'basis'>, id?: string) =>
-  mockRequest(() => {
-    penalties = id ? penalties.map((p) => (p.id === id ? { ...p, ...input } : p)) : [...penalties, { ...input, id: newId('f'), active: true }];
-    return finesSnapshot();
-  });
+export const savePenalty = async (input: Pick<PenaltyRule, 'label' | 'amount' | 'basis'>, id?: string) => {
+  const rules = penaltiesDoc.get();
+  await penaltiesDoc.set(id ? rules.map((p) => (p.id === id ? { ...p, ...input } : p)) : [...rules, { ...input, id: newId('f'), active: true }]);
+  return finesSnapshot();
+};
 
-export const setPenaltyActive = (id: string, active: boolean) =>
-  mockRequest(() => {
-    penalties = penalties.map((p) => (p.id === id ? { ...p, active } : p));
-    return finesSnapshot();
-  });
+export const setPenaltyActive = async (id: string, active: boolean) => {
+  await penaltiesDoc.set(penaltiesDoc.get().map((p) => (p.id === id ? { ...p, active } : p)));
+  return finesSnapshot();
+};
 
-export const removePenalty = (id: string) =>
-  mockRequest(() => {
-    penalties = penalties.filter((p) => p.id !== id);
-    return finesSnapshot();
-  });
+export const removePenalty = async (id: string) => {
+  await penaltiesDoc.set(penaltiesDoc.get().filter((p) => p.id !== id));
+  return finesSnapshot();
+};
 
-export const assessFine = (input: Pick<AssessedFine, 'agreementId' | 'label' | 'amount' | 'note'>) =>
-  mockRequest(() => {
-    assessed = [{ ...input, id: newId('FA'), date: DEMO_TODAY, status: 'Pending' }, ...assessed];
-    log(input.agreementId, `Fine assessed: ${input.label}, ₹${input.amount.toLocaleString('en-IN')}`);
-    return finesSnapshot();
+export const assessFine = async (input: Pick<AssessedFine, 'agreementId' | 'label' | 'amount' | 'note'>) => {
+  await saveLedger({
+    assessed: [{ ...input, id: newId('FA'), date: TODAY, status: 'Pending' }, ...ledger().assessed],
+    ...withActivity(input.agreementId, `Fine assessed: ${input.label}, ₹${input.amount.toLocaleString('en-IN')}`),
   });
+  return finesSnapshot();
+};
 
-export const setFineStatus = (id: string, status: FineStatus) =>
-  mockRequest(() => {
-    const f = assessed.find((x) => x.id === id);
-    assessed = assessed.map((x) => (x.id === id ? { ...x, status } : x));
-    if (f) log(f.agreementId, `Fine "${f.label}" marked ${status.toLowerCase()}`);
-    return finesSnapshot();
+export const setFineStatus = async (id: string, status: FineStatus) => {
+  const f = ledger().assessed.find((x) => x.id === id);
+  await saveLedger({
+    assessed: ledger().assessed.map((x) => (x.id === id ? { ...x, status } : x)),
+    ...(f ? withActivity(f.agreementId, `Fine "${f.label}" marked ${status.toLowerCase()}`) : {}),
   });
+  return finesSnapshot();
+};
 
 // ---------------------------------------------------------------- Details: e-signature and activity
 
-const detailSnapshot = () => ({ esign, activity, deposits, applied, assessed });
-export const loadAgreementDetail = () => mockRequest(detailSnapshot);
+const detailSnapshot = () => {
+  const l = ledger();
+  return { esign: l.esign, activity: l.activity, deposits: l.deposits, applied: l.applied, assessed: l.assessed };
+};
+export const loadAgreementDetail = async () => detailSnapshot();
 
-export const sendForESign = (input: Pick<ESignRequest, 'agreementId' | 'channel' | 'recipient'>) =>
-  mockRequest(() => {
-    esign = [...esign.filter((e) => e.agreementId !== input.agreementId), { ...input, status: 'Sent', sentOn: DEMO_TODAY }];
-    log(input.agreementId, `E-signature request sent by ${input.channel} to ${input.recipient}`);
-    return detailSnapshot();
+export const sendForESign = async (input: Pick<ESignRequest, 'agreementId' | 'channel' | 'recipient'>) => {
+  await saveLedger({
+    esign: [...ledger().esign.filter((e) => e.agreementId !== input.agreementId), { ...input, status: 'Sent', sentOn: TODAY }],
+    ...withActivity(input.agreementId, `E-signature request sent by ${input.channel} to ${input.recipient}`),
   });
+  return detailSnapshot();
+};
 
-export const setESignStatus = (agreementId: string, status: ESignStatus) =>
-  mockRequest(() => {
-    esign = esign.map((e) => (e.agreementId === agreementId ? { ...e, status } : e));
-    log(agreementId, `E-signature request marked ${status.toLowerCase()}`);
-    return detailSnapshot();
+export const setESignStatus = async (agreementId: string, status: ESignStatus) => {
+  await saveLedger({
+    esign: ledger().esign.map((e) => (e.agreementId === agreementId ? { ...e, status } : e)),
+    ...withActivity(agreementId, `E-signature request marked ${status.toLowerCase()}`),
   });
+  return detailSnapshot();
+};
 
-export const logAgreementActivity = (agreementId: string, text: string) =>
-  mockRequest(() => {
-    log(agreementId, text);
-    return detailSnapshot();
-  });
+export const logAgreementActivity = async (agreementId: string, text: string) => {
+  await saveLedger(withActivity(agreementId, text));
+  return detailSnapshot();
+};

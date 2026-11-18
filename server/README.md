@@ -38,12 +38,16 @@ Admin (Next.js app) ──┘
    npm install
    ```
 
-3. **Create the tables and load sample data**
+3. **Create the tables, the fleet and the first Owner**
 
    ```powershell
    npm run prisma:migrate     # applies prisma/migrations
-   npm run db:seed            # loads the same fleet, customers and staff the apps use as mock data
+   npm run db:seed            # creates the 7 vehicles and their prices (never overwrites existing ones)
+   npm run create-owner -- --email you@company.com --name "Your Name" --password "a-strong-password"
    ```
+
+   There are no sample customers, staff or bookings. Customers register in the app; Owners and Admins add staff
+   in the admin portal under Settings → Users & roles.
 
 4. **Run**
 
@@ -54,15 +58,23 @@ Admin (Next.js app) ──┘
    Open http://localhost:4000/health to confirm the API and database are up, and http://localhost:4000/docs for
    the API reference.
 
-## Sample accounts (from the seed)
+## Clearing the old sample data
 
-| Who | Email | Password |
+Databases created with the first version of the seed hold sample customers, staff logins and bookings. Remove them
+once with `npm run db:remove-sample` (on the VPS: `docker exec keygo-api npm run db:remove-sample`). It deletes only
+those exact sample records, keeps the vehicles, and reminds you to create an Owner if none is left.
+
+## What the API serves
+
+| Prefix | Who | What |
 |---|---|---|
-| Owner | owner@keygo.in | keygo123 |
-| Admin | admin@keygo.in | keygo123 |
-| Manager | manager@keygo.in | keygo123 |
-| Staff | staff@keygo.in | keygo123 |
-| Customer | ananya.s@example.com | keygo123 |
+| `/auth` | Anyone | Staff and customer sign-in, customer registration |
+| `/public` | Anyone | Rentable fleet with prices, loyalty tiers |
+| `/me` | Signed-in customer | Own profile, bookings (quote, confirm, pay, cancel, extend, keyless), agreement signing, notifications |
+| `/admin` | Signed-in staff | Workspace load, vehicles, bookings, customers, records, settings, files; `/admin/users` for Owners and Admins |
+
+Prices of customer bookings are always worked out on the server from the vehicle's price list. Double bookings
+are blocked by the database. Aadhaar numbers are stored encrypted and only the last four digits are returned.
 
 ## Layout
 
@@ -74,10 +86,17 @@ src/
   common/                 cross-cutting filters, guards and helpers
   prisma/                 PrismaService (one client for the app)
   health/                 GET /health
+  auth/                   sign-in, tokens and the guard on every route
+  admin/                  admin portal API, staff users, document files
+  customer/               customer app API and public fleet
+  domain/                 mapping, pricing, bookings and storage shared by both
 prisma/
-  schema.prisma           data model (phase 1: users, customers, branches, vehicles, rates, bookings)
+  schema.prisma           data model: staff, customers, vehicles, rates, bookings, admin records, settings, files
   migrations/             SQL migrations, including the no-double-booking exclusion constraint
-  seed.ts                 sample data matching the apps' mock data
+  seed.ts                 creates the fleet on a new database
+  fleet.ts                the 7 vehicles and their price lists
+  create-owner.ts         creates or resets an Owner account
+  remove-sample-data.ts   one-time removal of the first seed's sample records
 ```
 
 ## Conventions

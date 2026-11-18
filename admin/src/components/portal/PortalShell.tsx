@@ -30,7 +30,9 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { KeyGoLogo } from '../ui/KeyGoLogo';
 import { KeyGoToast } from '../ui/KeyGoToast';
 import { NAV_SECTIONS, sectionForPath, type NavSection } from '../../config/navigation';
-import { readSession, signOut, type StaffSession } from '../../services/auth';
+import { readSession, refreshSession, signOut, type StaffSession } from '../../services/auth';
+import { setUnauthorizedHandler } from '../../lib/api';
+import { onServerStateError } from '../../lib/serverState';
 import { loadWorkspace } from '../../services/workspace';
 import { useResource } from '../../services/mockClient';
 import { EmptyState, Screen } from '../kit';
@@ -210,18 +212,16 @@ function PortalFrame({ session, children }: { session: StaffSession; children: R
   );
 }
 
-function Workspace({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [session, setSession] = useState<StaffSession | null>(() => readSession());
+/** Shows save failures of settings documents as a toast. */
+function SaveErrors() {
+  const { showToast } = useApp();
+  useEffect(() => onServerStateError(showToast), [showToast]);
+  return null;
+}
+
+/** Loads everything from the server once the staff member is signed in. */
+function SignedIn({ session, children }: { session: StaffSession; children: ReactNode }) {
   const workspace = useResource(loadWorkspace);
-  const isLogin = pathname === '/login';
-  const refresh = () => setSession(readSession());
-
-  useEffect(() => {
-    if (!session && !isLogin) router.replace('/login');
-  }, [session, isLogin, router]);
-
   if (!workspace.data) {
     return (
       <Screen>
@@ -230,10 +230,43 @@ function Workspace({ children }: { children: ReactNode }) {
     );
   }
   return (
+    <AppProvider seed={workspace.data}>
+      <SaveErrors />
+      <PortalFrame session={session}>{children}</PortalFrame>
+    </AppProvider>
+  );
+}
+
+function Workspace({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const [session, setSession] = useState<StaffSession | null>(() => readSession());
+  const isLogin = pathname === '/login';
+  const refresh = () => setSession(readSession());
+
+  useEffect(() => {
+    if (!session && !isLogin) router.replace('/login');
+    if (session && isLogin) router.replace('/dashboard');
+  }, [session, isLogin, router]);
+
+  // An expired or revoked session sends the user back to sign in
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      signOut();
+      setSession(null);
+    });
+    return () => setUnauthorizedHandler(null);
+  }, []);
+
+  // Pick up role or name changes made by an administrator since the last visit
+  useEffect(() => {
+    if (session) refreshSession().then(setSession, () => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id]);
+
+  return (
     <SessionContext.Provider value={{ session, refresh }}>
-      <AppProvider seed={workspace.data}>
-        {isLogin ? children : session ? <PortalFrame session={session}>{children}</PortalFrame> : null}
-      </AppProvider>
+      {isLogin ? children : session ? <SignedIn key={session.id} session={session}>{children}</SignedIn> : null}
     </SessionContext.Provider>
   );
 }

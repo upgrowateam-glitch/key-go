@@ -1,5 +1,7 @@
 import { mockRequest } from './mockClient';
-import { DEMO_TODAY } from '../data/mockData';
+import { newId } from '../config/defaults';
+import { serverDoc } from '../lib/serverState';
+import { TODAY } from '../lib/today';
 import type { Vehicle } from '../types';
 
 export type ContactOutcome = 'Reached' | 'No answer' | 'Promised return' | 'Escalated';
@@ -19,18 +21,15 @@ export interface GpsPing {
   updatedAt: string;
 }
 
-// Mock server state: survives tab switches, resets on reload.
-let contacts: ContactLogEntry[] = [];
+/** Calls and messages to customers about overdue returns, stored on the server. */
+const contactsDoc = serverDoc<ContactLogEntry[]>('tracking.contacts', []);
 
-export const loadContactLog = () => mockRequest(() => contacts);
+export const loadContactLog = async () => contactsDoc.get();
 
 export const logContact = (input: Omit<ContactLogEntry, 'id' | 'date'>) =>
-  mockRequest(() => {
-    contacts = [{ ...input, id: `CL-${Date.now().toString(36).toUpperCase()}`, date: DEMO_TODAY }, ...contacts];
-    return contacts;
-  });
+  contactsDoc.set([{ ...input, id: newId('CL'), date: TODAY }, ...contactsDoc.get()]);
 
-/** Stands in for a telematics poll: returns a fresh simulated reading for each vehicle on the road. */
+/** Stands in for a telematics poll until GPS devices are connected: a simulated reading for each vehicle on the road. */
 export const pingFleet = (vehicles: Vehicle[]) =>
   mockRequest(() => {
     const at = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

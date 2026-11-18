@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useRef, useState, ReactNode, useCallback } from 'react';
 import {
   Vehicle,
   Booking,
@@ -23,10 +23,14 @@ import {
   RentalPurpose,
   BookingClassification,
 } from '../types';
-import * as mockSeed from '../data/mockData';
-import { DEMO_TODAY } from '../data/mockData';
+import { DEFAULT_AUTOMATIONS, DEFAULT_LOYALTY_TIERS, DEFAULT_NOTIFICATION_SETTINGS, newId } from '../config/defaults';
+import { api } from '../lib/api';
 import { computeQuote } from '../lib/pricing';
 import { addDays, daysBetween } from '../lib/format';
+import { serverDoc, type ServerDoc } from '../lib/serverState';
+import { useSyncedList } from '../lib/syncedList';
+import { TODAY } from '../lib/today';
+import type { Workspace } from '../services/workspace';
 
 export type UserRole = 'customer' | 'operations';
 
@@ -169,9 +173,9 @@ interface AppContextType {
 
 const defaultDraft: BookingDraft = {
   pickupLocation: 'Bengaluru International Airport (BLR)',
-  pickupDate: addDays(DEMO_TODAY, 3),
+  pickupDate: addDays(TODAY, 3),
   pickupTime: '10:00 AM',
-  returnDate: addDays(DEMO_TODAY, 6),
+  returnDate: addDays(TODAY, 6),
   returnTime: '06:00 PM',
   vehicleType: 'All',
   term: 'Daily',
@@ -184,45 +188,89 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const nowLabel = () =>
   new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-export type WorkspaceSeed = typeof mockSeed;
+const enc = encodeURIComponent;
 
-export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }> = ({ children, seed }) => {
+/** Settings documents holding whole lists (edited in place rather than added to). */
+const notificationSettingsDoc = serverDoc<NotificationChannelSetting[]>('notificationSettings', DEFAULT_NOTIFICATION_SETTINGS);
+const automationsDoc = serverDoc<AutomationRule[]>('automations', DEFAULT_AUTOMATIONS);
+const loyaltyTiersDoc = serverDoc<LoyaltyRewardTier[]>('loyaltyTiers', DEFAULT_LOYALTY_TIERS);
+
+/** A list stored as one settings document: saved whole after each change, put back if the save fails. */
+function useDocList<T>(doc: ServerDoc<T[]>, onError: (message: string) => void) {
+  const [items, setItems] = useState<T[]>(doc.get);
+  const ref = useRef(items);
+  const set = useCallback(
+    (update: T[] | ((prev: T[]) => T[])) => {
+      const prev = ref.current;
+      const next = typeof update === 'function' ? (update as (p: T[]) => T[])(prev) : update;
+      ref.current = next;
+      setItems(next);
+      doc.set(next).catch((e: Error) => {
+        ref.current = prev;
+        setItems(prev);
+        onError(e.message);
+      });
+    },
+    [doc, onError]
+  );
+  return [items, set] as const;
+}
+
+export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = ({ children, seed }) => {
   const [role, setRoleState] = useState<UserRole>('operations');
   const [toast, setToast] = useState<ToastState>({ visible: false, message: '' });
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [vehicles, setVehicles] = useState<Vehicle[]>(seed.INITIAL_VEHICLES);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [bookings, setBookings] = useState<Booking[]>(seed.INITIAL_BOOKINGS);
-  // Latest bookings, including ones created earlier in the same event handler (e.g. quote → confirm)
-  const bookingsRef = useRef(bookings);
-  useEffect(() => {
-    bookingsRef.current = bookings;
-  }, [bookings]);
-  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(defaultDraft);
-
-  const [customers, setCustomers] = useState<Customer[]>(seed.INITIAL_CUSTOMERS);
-  const [agreements, setAgreements] = useState<Agreement[]>(seed.INITIAL_AGREEMENTS);
-  const [inspections, setInspections] = useState<InspectionRecord[]>(seed.INITIAL_INSPECTIONS);
-  const [staffPunches, setStaffPunches] = useState<StaffPunch[]>(seed.INITIAL_STAFF_PUNCHES);
-  const [fastagLogs, setFastagLogs] = useState<FASTagLog[]>(seed.INITIAL_FASTAG_LOGS);
-  const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceRecord[]>(seed.INITIAL_MAINTENANCE);
-  const [maintenanceReminders, setMaintenanceReminders] = useState<MaintenanceReminder[]>(seed.INITIAL_MAINTENANCE_REMINDERS);
-  const [drivers, setDrivers] = useState<Driver[]>(seed.INITIAL_DRIVERS);
-  const [commissions, setCommissions] = useState<CustomerCodeCommission[]>(seed.INITIAL_COMMISSIONS);
-  const [automations, setAutomations] = useState<AutomationRule[]>(seed.INITIAL_AUTOMATIONS);
-  const [campaigns, setCampaigns] = useState<Campaign[]>(seed.INITIAL_CAMPAIGNS);
-  const [financeEntries, setFinanceEntries] = useState<FinanceEntry[]>(seed.INITIAL_FINANCE);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(seed.INITIAL_NOTIFICATIONS);
-  const [notificationSettings, setNotificationSettings] = useState<NotificationChannelSetting[]>(seed.INITIAL_NOTIFICATION_SETTINGS);
-  const [messageLog, setMessageLog] = useState<MessageLogEntry[]>(seed.INITIAL_MESSAGE_LOG);
-  const loyaltyTiers = seed.INITIAL_LOYALTY_TIERS;
-
   const showToast = useCallback((message: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ visible: true, message });
-    toastTimer.current = setTimeout(() => setToast({ visible: false, message: '' }), 2800);
+    toastTimer.current = setTimeout(() => setToast({ visible: false, message: '' }), 3200);
   }, []);
+  const onSaveError = useCallback((message: string) => showToast(`Not saved: ${message}`), [showToast]);
+
+  /** A list of records saved one by one to /admin/records/<collection>. */
+  const recordSync = <T,>(collection: string, keyOf: (item: T) => string = (item) => (item as { id: string }).id) => ({
+    keyOf,
+    save: (item: T) => api(`/admin/records/${collection}/${enc(keyOf(item))}`, { method: 'PUT', body: item }),
+    remove: (key: string) => api(`/admin/records/${collection}/${enc(key)}`, { method: 'DELETE' }),
+    onError: onSaveError,
+  });
+  const records = <T,>(collection: string) => (seed.records[collection] ?? []) as T[];
+
+  const [vehicles, setVehicles] = useSyncedList<Vehicle>(seed.vehicles, {
+    keyOf: (v) => v.id,
+    save: ({ imageAsset: _photo, ...v }) => api(`/admin/vehicles/${enc(v.id)}`, { method: 'PUT', body: v }),
+    onError: onSaveError,
+  });
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // bookingsRef: latest bookings, including ones created earlier in the same event handler (e.g. quote → confirm)
+  const [bookings, setBookings, bookingsRef] = useSyncedList<Booking>(seed.bookings, {
+    keyOf: (b) => b.id,
+    save: (b) => api(`/admin/bookings/${enc(b.id)}`, { method: 'PUT', body: b }),
+    onError: onSaveError,
+  });
+  const [bookingDraft, setBookingDraft] = useState<BookingDraft>(defaultDraft);
+
+  const [customers, setCustomers] = useSyncedList<Customer>(seed.customers, {
+    keyOf: (c) => c.id,
+    save: (c) => api(`/admin/customers/${enc(c.id)}`, { method: 'PUT', body: c }),
+    onError: onSaveError,
+  });
+  const [agreements, setAgreements] = useSyncedList<Agreement>(records('agreements'), recordSync('agreements'));
+  const [inspections, setInspections] = useSyncedList<InspectionRecord>(records('inspections'), recordSync('inspections'));
+  const [staffPunches, setStaffPunches] = useSyncedList<StaffPunch>(records('staffPunches'), recordSync('staffPunches'));
+  const [fastagLogs, setFastagLogs] = useSyncedList<FASTagLog>(records('fastagLogs'), recordSync('fastagLogs'));
+  const [maintenanceLogs, setMaintenanceLogs] = useSyncedList<MaintenanceRecord>(records('maintenanceLogs'), recordSync('maintenanceLogs'));
+  const [maintenanceReminders, setMaintenanceReminders] = useSyncedList<MaintenanceReminder>(records('maintenanceReminders'), recordSync('maintenanceReminders'));
+  const [drivers, setDrivers] = useSyncedList<Driver>(records('drivers'), recordSync('drivers'));
+  const [commissions, setCommissions] = useSyncedList<CustomerCodeCommission>(records('commissions'), recordSync<CustomerCodeCommission>('commissions', (c) => c.code));
+  const [campaigns, setCampaigns] = useSyncedList<Campaign>(records('campaigns'), recordSync('campaigns'));
+  const [financeEntries, setFinanceEntries] = useSyncedList<FinanceEntry>(records('financeEntries'), recordSync('financeEntries'));
+  const [notifications, setNotifications] = useSyncedList<NotificationItem>(records('notifications'), recordSync('notifications'));
+  const [messageLog, setMessageLog] = useSyncedList<MessageLogEntry>(records('messageLog'), recordSync('messageLog'));
+  const [automations, setAutomations] = useDocList(automationsDoc, onSaveError);
+  const [notificationSettings, setNotificationSettings] = useDocList(notificationSettingsDoc, onSaveError);
+  const [loyaltyTiers] = useDocList(loyaltyTiersDoc, onSaveError);
 
   const hideToast = () => setToast({ visible: false, message: '' });
 
@@ -257,7 +305,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
   };
 
   // ---------- Booking lifecycle ----------
-  const newBookingId = () => `KG-${Math.floor(1000 + Math.random() * 9000)}`;
+  const newBookingId = () => newId('KG');
 
   const createQuote = (input: QuoteInput): Booking => {
     const vehicle = vehicles.find((v) => v.id === input.vehicleId) ?? vehicles[0];
@@ -290,7 +338,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
       depositAmount: q.deposit,
       status: 'Quoted',
       paymentStatus: 'Unpaid',
-      createdAt: DEMO_TODAY,
+      createdAt: TODAY,
       reminderScheduledFor: addDays(input.pickupDate, -2),
       reminderSent: false,
       driverId: input.driverId,
@@ -332,7 +380,6 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
   const createBooking = (vehicle: Vehicle): Booking => {
     const quote = createQuote({
       vehicleId: vehicle.id,
-      customerId: 'cust-1',
       pickupLocation: bookingDraft.pickupLocation || 'City Center',
       pickupDate: bookingDraft.pickupDate,
       pickupTime: bookingDraft.pickupTime,
@@ -351,11 +398,11 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
   const signAgreement = (bookingId: string, input: SignAgreementInput): Agreement => {
     const b = bookings.find((x) => x.id === bookingId)!;
     const agreement: Agreement = {
-      id: `AGR-2026-${Math.floor(100 + Math.random() * 900)}`,
+      id: newId(`AGR-${TODAY.slice(0, 4)}`),
       bookingId,
       customerName: b.customerName,
       vehicleNumber: b.vehicleNumber,
-      signedDate: DEMO_TODAY,
+      signedDate: TODAY,
       status: 'Active',
       depositTermsAccepted: true,
       signaturePreview: `${input.signedBy} (Digitally Signed)`,
@@ -379,12 +426,12 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
     const b = bookings.find((x) => x.id === bookingId)!;
     const record: InspectionRecord = {
       ...input,
-      id: `INSP-${Math.floor(100 + Math.random() * 900)}`,
+      id: newId('INSP'),
       bookingId,
       vehicleNumber: b.vehicleNumber,
       type,
       damagesMarked: input.damageMarks.map((d) => `${d.zone} — ${d.kind} (${d.severity})`),
-      date: `${DEMO_TODAY} ${nowLabel()}`,
+      date: `${TODAY} ${nowLabel()}`,
     };
     setInspections((prev) => [record, ...prev]);
     if (type === 'Pickup') {
@@ -421,16 +468,16 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
       tollCharges: s.tollCharges,
       fineCharges: s.fineCharges,
       damageCharges: s.damageCharges,
-      completedAt: DEMO_TODAY,
+      completedAt: TODAY,
       keylessUnlocked: false,
     });
     setVehicleStatusSilently(b.vehicleId, 'Available');
     setAgreements((prev) => prev.map((a) => (a.bookingId === bookingId ? { ...a, status: 'Closed' } : a)));
     const extra = s.fuelCharges + s.tollCharges + s.fineCharges + s.damageCharges;
     setFinanceEntries((prev) => [
-      { id: `FIN-${Date.now()}`, date: DEMO_TODAY, category: 'Rental income', direction: 'in', amount: b.totalAmount, vehicleId: b.vehicleId, reference: b.id },
+      { id: newId('FIN'), date: TODAY, category: 'Rental income', direction: 'in', amount: b.totalAmount, vehicleId: b.vehicleId, reference: b.id },
       ...(s.fineCharges + s.damageCharges > 0
-        ? [{ id: `FIN-${Date.now()}-f`, date: DEMO_TODAY, category: 'Fine collection' as const, direction: 'in' as const, amount: s.fineCharges + s.damageCharges, vehicleId: b.vehicleId, reference: `${b.id} fines & damage` }]
+        ? [{ id: newId('FIN'), date: TODAY, category: 'Fine collection' as const, direction: 'in' as const, amount: s.fineCharges + s.damageCharges, vehicleId: b.vehicleId, reference: `${b.id} fines & damage` }]
         : []),
       ...prev,
     ]);
@@ -497,7 +544,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
   const addMaintenanceRecord = (rec: MaintenanceRecord) => {
     setMaintenanceLogs((prev) => [rec, ...prev]);
     setFinanceEntries((prev) => [
-      { id: `FIN-${Date.now()}`, date: rec.date, category: 'Maintenance', direction: 'out', amount: rec.cost, vehicleId: rec.vehicleId, reference: rec.id },
+      { id: newId('FIN'), date: rec.date, category: 'Maintenance', direction: 'out', amount: rec.cost, vehicleId: rec.vehicleId, reference: rec.id },
       ...prev,
     ]);
     showToast('Maintenance record added');
@@ -521,7 +568,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
       assignments: [
         ...d.assignments,
         {
-          id: `as-${Date.now()}`,
+          id: newId('AS'),
           bookingId,
           vehicleNumber: b.vehicleNumber,
           date: b.pickupDate,
@@ -583,7 +630,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
     setNotificationSettings((prev) => prev.map((s) => (s.type === type ? { ...s, [channel]: !s[channel] } : s)));
 
   const sendTestMessage: AppContextType['sendTestMessage'] = (type, channel, recipient, preview) => {
-    const id = `MSG-${Date.now()}`;
+    const id = newId('MSG');
     setMessageLog((prev) => [{ id, channel, type, recipient, preview, status: 'Queued', time: `Today, ${nowLabel()}` }, ...prev]);
     showToast(`${channel} test queued (simulated — nothing is sent)`);
     // Simulated delivery lifecycle
@@ -599,8 +646,8 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: WorkspaceSeed }>
         toast,
         showToast,
         hideToast,
-        today: DEMO_TODAY,
-        currentCustomerId: 'cust-1',
+        today: TODAY,
+        currentCustomerId: '',
         vehicles,
         selectedCategory,
         setSelectedCategory,

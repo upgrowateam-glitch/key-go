@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Card, Field, FormRow, Screen, SimulatedNote } from '../components/kit';
+import { Button, Card, Field, FormRow, Screen } from '../components/kit';
 import { useApp } from '../context/AppContext';
 import { parseISODate } from '../lib/format';
 import { register } from '../services/auth';
@@ -12,7 +12,7 @@ export default function RegisterScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { customers, addCustomer, today, showToast } = useApp();
+  const { showToast } = useApp();
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', dob: '', password: '' });
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,8 +34,7 @@ export default function RegisterScreen() {
     if (Object.values(errors).some(Boolean)) return;
     setBusy(true);
     try {
-      const customer = await register(form, customers, today);
-      addCustomer(customer);
+      await register(form);
       showToast('Account created. Upload your documents from Profile before pickup.');
       router.replace('/(tabs)' as any);
     } catch (e) {
@@ -66,7 +65,6 @@ export default function RegisterScreen() {
               Sign in
             </Link>
           </Text>
-          <SimulatedNote>Your account is stored on this device only until the KeyGo backend is connected.</SimulatedNote>
         </Card>
       </Screen>
     </View>

@@ -1,21 +1,15 @@
-import { mockRequest } from './mockClient';
+import { newId } from '../config/defaults';
+import { serverDoc } from '../lib/serverState';
 import type { FASTagLog } from '../types';
 
-/** AppContext has no way to add a toll, so entries added by hand live in this mock store. Resets on reload. */
-let manual: FASTagLog[] = [];
+/** Tolls entered by hand (until the FASTag provider is connected), stored on the server. */
+const manualDoc = serverDoc<FASTagLog[]>('fastag.manual', []);
 
 export const isManualToll = (id: string) => id.startsWith('FT-MAN-');
 
-export const loadManualTolls = () => mockRequest(() => manual);
+export const loadManualTolls = async () => manualDoc.get();
 
 export const addManualToll = (input: Omit<FASTagLog, 'id' | 'billedToCustomer'>) =>
-  mockRequest(() => {
-    manual = [{ ...input, id: `FT-MAN-${Date.now().toString(36).toUpperCase()}`, billedToCustomer: false }, ...manual];
-    return manual;
-  });
+  manualDoc.set([{ ...input, id: newId('FT-MAN'), billedToCustomer: false }, ...manualDoc.get()]);
 
-export const billManualToll = (id: string) =>
-  mockRequest(() => {
-    manual = manual.map((l) => (l.id === id ? { ...l, billedToCustomer: true } : l));
-    return manual;
-  });
+export const billManualToll = (id: string) => manualDoc.set(manualDoc.get().map((l) => (l.id === id ? { ...l, billedToCustomer: true } : l)));

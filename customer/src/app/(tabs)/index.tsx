@@ -8,7 +8,6 @@ import {
   Navigation,
   Headphones,
   Smartphone,
-  Star,
   X,
   SearchX,
   CalendarRange,
@@ -33,7 +32,6 @@ import {
   Card,
   Button,
   EmptyState,
-  Avatar,
 } from '../../components/kit';
 import { useResponsive } from '../../hooks/useResponsive';
 import { Vehicle } from '../../types';
@@ -68,12 +66,6 @@ const STEPS = [
   { step: '02', title: 'Pick your dates', desc: 'Rent for a day, a week or a whole month.', Icon: CalendarRange },
   { step: '03', title: 'Pay securely', desc: 'UPI, cards or wallets. Deposit returned after the trip.', Icon: CreditCard },
   { step: '04', title: 'Get the keys', desc: 'Delivered to your door, sanitized and ready to go.', Icon: KeyRound },
-];
-
-const REVIEWS = [
-  { name: 'Ananya Sharma', trip: 'Weekend trip', comment: 'Car arrived 20 minutes early and spotless. Booking took less time than making tea.' },
-  { name: 'Rahul Kapoor', trip: 'Monthly plan', comment: 'Clear pricing, no surprises at return. Security deposit was back in my account the next day.' },
-  { name: 'Suresh Nambiar', trip: 'Road trip', comment: 'Had a flat tyre on the highway. KeyGo roadside support sent assistance in 25 minutes.' },
 ];
 
 export default function HomeScreen() {
@@ -413,23 +405,6 @@ export default function HomeScreen() {
         </View>
       </Section>
 
-      {/* --- REVIEWS --- */}
-      <Section title="Loved by drivers" subtitle="Rated 4.9 out of 5 by KeyGo customers">
-        {isPhone ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingRight: 4 }}>
-            {REVIEWS.map((rev) => (
-              <ReviewCard key={rev.name} {...rev} width={Math.min(280, width - gutter * 2 - 40)} />
-            ))}
-          </ScrollView>
-        ) : (
-          <Grid cols={3} gap={12}>
-            {REVIEWS.map((rev) => (
-              <ReviewCard key={rev.name} {...rev} />
-            ))}
-          </Grid>
-        )}
-      </Section>
-
       {/* --- KEYLESS CTA --- */}
       <Card tone="soft" style={[styles.ctaCard, !isPhone && { flexDirection: 'row', alignItems: 'center', gap: 20 }]}>
         <View style={styles.ctaIcon}>
@@ -443,28 +418,6 @@ export default function HomeScreen() {
       </Card>
 
     </Screen>
-  );
-}
-
-function ReviewCard({ name, trip, comment, width }: { name: string; trip: string; comment: string; width?: number }) {
-  const colors = useThemeColors();
-  const styles = useThemedStyles(makeStyles);
-  return (
-    <Card style={width ? { width } : { height: '100%' }}>
-      <View style={styles.starsRow} accessibilityLabel="5 out of 5 stars">
-        {[1, 2, 3, 4, 5].map((s) => (
-          <Star key={s} size={14} color={colors.highlight} fill={colors.highlight} />
-        ))}
-      </View>
-      <Text style={styles.reviewText}>&ldquo;{comment}&rdquo;</Text>
-      <View style={styles.reviewWho}>
-        <Avatar name={name} size={36} />
-        <View>
-          <Text style={styles.whoName}>{name}</Text>
-          <Text style={styles.whoTrip}>{trip}</Text>
-        </View>
-      </View>
-    </Card>
   );
 }
 

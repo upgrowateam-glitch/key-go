@@ -45,9 +45,10 @@ services:
       DATABASE_URL: postgresql://keygo:${DB_PASSWORD}@127.0.0.1:${DB_PORT}/keygo?schema=public
       HOST: 127.0.0.1
       PORT: ${API_PORT}
-      CORS_ORIGINS: https://${ADMIN_DOMAIN},https://${APP_DOMAIN}
+      # The live sites, plus the local dev servers (admin npm run dev, Expo web) so they can use this API too.
+      # The phone app is not limited by this list. Every data route still needs a sign-in token.
+      CORS_ORIGINS: https://${ADMIN_DOMAIN},https://${APP_DOMAIN},http://localhost:3000,http://localhost:8081
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       FILE_STORAGE_DIR: /app/storage
     volumes:
       - keygo-storage:/app/storage

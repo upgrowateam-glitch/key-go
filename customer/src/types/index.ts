@@ -68,6 +68,10 @@ export interface Vehicle {
   /** Labels of photos on file (e.g. "Front", "Interior"); images are placeholders in the UI phase. */
   photoLabels: string[];
   photoUrl?: string;
+  /** Fleet photo shipped with the app (data/fleetPhotos.ts). */
+  photoKey?: string;
+  /** Current price list from the server; pricePerDay equals rates.daily. */
+  rates?: import('../data/pricing').VehicleRates;
   imageAsset?: any;
   /** Attribution for `imageAsset` (real photos are Creative Commons licensed and must be credited). */
   photoCredit?: PhotoCredit;
