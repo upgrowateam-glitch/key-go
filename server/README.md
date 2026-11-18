@@ -88,4 +88,4 @@ prisma/
 - Roles are enforced on the server; the admin portal's sidebar roles are only a UI hint.
 
 Proposed data model and endpoints: [`../Documentation/database-design.md`](../Documentation/database-design.md) and
-[`../Documentation/api-documentation.md`](../Documentation/api-documentation.md).
+                                                                                                                                                               [`../Documentation/api-documentation.md`](../Documentation/api-documentation.md).

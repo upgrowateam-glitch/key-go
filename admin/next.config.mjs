@@ -12,6 +12,10 @@ const WEB_EXTENSIONS = ['.web.tsx', '.web.ts', '.web.js', '.tsx', '.ts', '.jsx',
 const nextConfig = {
   outputFileTracingRoot: root,
 
+  // Production builds include a self-contained server (.next/standalone) for the Docker image.
+  // `npm run dev` is unaffected.
+  output: 'standalone',
+
   // Allow Cloudflare Tunnel during development
   allowedDevOrigins: [
     'detail-need-passes-california.trycloudflare.com',

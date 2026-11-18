@@ -14,6 +14,10 @@ class Env {
 
   @IsOptional()
   @IsString()
+  HOST?: string;
+
+  @IsOptional()
+  @IsString()
   CORS_ORIGINS?: string;
 
   @IsOptional()

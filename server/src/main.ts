@@ -30,8 +30,10 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, swagger));
 
   const port = Number(config.get('PORT') ?? 4000);
-  await app.listen(port);
-  console.log(`KeyGo API listening on http://localhost:${port} (docs at /docs)`);
+  // On the VPS this is 127.0.0.1, so only Traefik on the same machine can reach the API.
+  const host = config.get<string>('HOST') ?? '0.0.0.0';
+  await app.listen(port, host);
+  console.log(`KeyGo API listening on http://${host}:${port} (docs at /docs)`);
 }
 
 void bootstrap();
