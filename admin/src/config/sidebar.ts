@@ -48,6 +48,8 @@ export interface SidebarItem {
 
 export interface SidebarGroup {
   title: string;
+  /** Shown on the group line; a group with one item is shown as that item's link instead. */
+  icon: LucideIcon;
   items: SidebarItem[];
 }
 
@@ -55,9 +57,11 @@ const item = (label: string, icon: LucideIcon, path: string, params?: Record<str
 
 /** The admin portal sidebar: groups of links to pages and their tabs. Who sees an item follows its page's roles. */
 export const SIDEBAR: SidebarGroup[] = [
-  { title: 'Overview', items: [item('Dashboard', LayoutDashboard, '/dashboard')] },
+  { title: 'Overview',
+    icon: LayoutDashboard, items: [item('Dashboard', LayoutDashboard, '/dashboard')] },
   {
     title: 'Fleet Management',
+    icon: Car,
     items: [
       item('Vehicles', Car, '/fleet'),
       item('Vehicle Categories', Shapes, '/fleet', { view: 'categories' }),
@@ -68,6 +72,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'Rental Operations',
+    icon: CalendarCheck,
     items: [
       item('Bookings & Reservations', CalendarCheck, '/bookings'),
       item('Quotations', FileText, '/bookings', { tab: 'quotes' }),
@@ -79,6 +84,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'People Management',
+    icon: Users,
     items: [
       item('Customers', Users, '/customers'),
       item('Drivers', IdCard, '/people', { tab: 'drivers' }),
@@ -88,6 +94,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'Operations',
+    icon: Wrench,
     items: [
       item('Maintenance', Wrench, '/maintenance'),
       item('Vehicle Documents', FolderOpen, '/documents'),
@@ -96,6 +103,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'Finance',
+    icon: IndianRupee,
     items: [
       item('Transactions & Payments', ArrowLeftRight, '/finance', { tab: 'payments-and-refunds' }),
       item('Income & Expenses', TrendingUp, '/finance', { tab: 'overview' }),
@@ -106,6 +114,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'Customer Growth',
+    icon: Gift,
     items: [
       item('Customer Codes & Referrals', Ticket, '/marketing', { tab: 'referral-codes' }),
       item('Marketing & Offers', Megaphone, '/marketing', { tab: 'campaigns' }),
@@ -115,6 +124,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'Reports',
+    icon: ChartColumn,
     items: [
       item('Reports & Analytics', ChartColumn, '/reports'),
       item('Vehicle Reports', CarFront, '/reports', { tab: 'vehicle-wise' }),
@@ -124,6 +134,7 @@ export const SIDEBAR: SidebarGroup[] = [
   },
   {
     title: 'System',
+    icon: Settings,
     items: [
       item('WhatsApp & SMS', MessageCircle, '/notifications', { tab: 'whatsapp-and-sms-settings' }),
       item('Settings', Settings, '/settings'),

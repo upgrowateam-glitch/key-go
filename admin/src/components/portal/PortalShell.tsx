@@ -3,14 +3,14 @@
 import React, { ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Bell, LogOut, Menu } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, LogOut, Menu } from 'lucide-react-native';
 import { AppProvider, useApp } from '../../context/AppContext';
 import { ThemeProvider, useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { KeyGoLogo } from '../ui/KeyGoLogo';
 import { KeyGoToast } from '../ui/KeyGoToast';
 import { sectionForPath } from '../../config/navigation';
-import { activeSidebarItem, hrefOf, SIDEBAR } from '../../config/sidebar';
+import { activeSidebarItem, hrefOf, SIDEBAR, type SidebarItem } from '../../config/sidebar';
 import { readSession, refreshSession, signOut, type StaffSession } from '../../services/auth';
 import { setUnauthorizedHandler } from '../../lib/api';
 import { onServerStateError } from '../../lib/serverState';
@@ -52,33 +52,59 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
     onNavigate?.();
   };
 
+  // One group open at a time; the group of the current page opens by itself
+  const activeGroup = groups.find((g) => active && g.items.includes(active))?.title;
+  const [open, setOpen] = useState<string | undefined>(activeGroup);
+  useEffect(() => {
+    if (activeGroup) setOpen(activeGroup);
+  }, [activeGroup]);
+
+  const link = (i: SidebarItem, nested: boolean) => {
+    const isActive = active === i;
+    const Icon = i.icon;
+    return (
+      <TouchableOpacity
+        key={i.label}
+        accessibilityRole="link"
+        accessibilityState={{ selected: isActive }}
+        style={[nested ? styles.subItem : styles.item, isActive && styles.itemActive]}
+        onPress={() => go(hrefOf(i))}>
+        {isActive ? <View style={styles.activeBar} /> : null}
+        {nested ? null : <Icon size={18} color={isActive ? colors.navActive : colors.navInactive} />}
+        <Text style={[nested ? styles.subText : styles.itemText, isActive && styles.itemTextActive]} numberOfLines={1}>
+          {i.label}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
   return (
-    <ScrollView style={styles.sidebar} contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
-      {groups.map((g) => (
-        <View key={g.title} style={styles.group}>
-          <Text style={styles.groupTitle} accessibilityRole="header">
-            {g.title.toUpperCase()}
-          </Text>
-          {g.items.map((i) => {
-            const isActive = active === i;
-            const Icon = i.icon;
-            return (
-              <TouchableOpacity
-                key={i.label}
-                accessibilityRole="link"
-                accessibilityState={{ selected: isActive }}
-                style={[styles.item, isActive && styles.itemActive]}
-                onPress={() => go(hrefOf(i))}>
-                {isActive ? <View style={styles.activeBar} /> : null}
-                <Icon size={17} color={isActive ? colors.navActive : colors.navInactive} />
-                <Text style={[styles.itemText, isActive && styles.itemTextActive]} numberOfLines={1}>
-                  {i.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      ))}
+    <ScrollView style={styles.sidebar} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+      {groups.map((g) => {
+        // A group with a single page (Overview → Dashboard) is just that page's link
+        if (g.items.length === 1) return link(g.items[0], false);
+        const expanded = open === g.title;
+        const holdsActive = activeGroup === g.title;
+        const GroupIcon = g.icon;
+        const Chevron = expanded ? ChevronDown : ChevronRight;
+        return (
+          <View key={g.title}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded }}
+              accessibilityLabel={`${g.title}, ${expanded ? 'collapse' : 'expand'}`}
+              style={styles.item}
+              onPress={() => setOpen(expanded ? undefined : g.title)}>
+              <GroupIcon size={18} color={holdsActive ? colors.navActive : colors.navInactive} />
+              <Text style={[styles.itemText, holdsActive && { color: colors.navActive }]} numberOfLines={1}>
+                {g.title}
+              </Text>
+              <Chevron size={15} color={colors.navInactive} />
+            </TouchableOpacity>
+            {expanded ? <View style={styles.subList}>{g.items.map((i) => link(i, true))}</View> : null}
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -258,9 +284,11 @@ const makeStyles = (colors: ThemeColors) =>
     notifDot: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.highlight, borderWidth: 2, borderColor: colors.nav, alignItems: 'center', justifyContent: 'center' },
     notifCount: { color: colors.onHighlight, fontSize: 9, fontWeight: '800' },
     sidebar: { width: 288, flexGrow: 0, flexShrink: 0, backgroundColor: colors.nav, borderRightWidth: 1, borderRightColor: colors.navLine },
-    group: { marginTop: 14 },
-    groupTitle: { color: withAlpha(colors.onNav, 0.5), fontSize: 11, fontWeight: '800', letterSpacing: 1.1, paddingHorizontal: 22, marginBottom: 6 },
-    item: { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 10, marginHorizontal: 10, marginVertical: 1, paddingHorizontal: 12, paddingVertical: 9 },
+    item: { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 10, marginHorizontal: 10, marginVertical: 2, paddingHorizontal: 12, paddingVertical: 10 },
+    // Sub-items sit under their group, along a thin guide line
+    subList: { marginLeft: 31, marginRight: 10, marginBottom: 6, borderLeftWidth: 1, borderLeftColor: withAlpha(colors.onNav, 0.14) },
+    subItem: { borderRadius: 8, marginLeft: 8, marginVertical: 1, paddingHorizontal: 12, paddingVertical: 8 },
+    subText: { color: colors.navInactive, fontSize: 13, fontWeight: '500' },
     itemActive: { backgroundColor: colors.navLine },
     activeBar: { position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, borderRadius: 2, backgroundColor: colors.highlight },
     itemText: { flex: 1, color: colors.navInactive, fontSize: 13.5, fontWeight: '600', letterSpacing: 0.1 },
