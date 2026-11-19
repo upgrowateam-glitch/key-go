@@ -9,6 +9,7 @@ import { providersStore, type ProviderConfig } from '../../services/notification
 import { WithStore } from './listControls';
 import { WhatsAppLinkCard } from './WhatsAppLinkCard';
 import { useStaffSession } from '../../components/portal/PortalShell';
+import { canAccess } from '../../services/auth';
 import { CHANNEL_LABELS, CHANNEL_TYPES, ChannelSwitch, makeStyles, TEMPLATES, TYPE_META, useSendTest, type ChannelType } from './shared';
 
 export default function WhatsAppSmsSettingsTab() {
@@ -23,7 +24,8 @@ function ChannelsTab({ configs, setConfigs }: { configs: ProviderConfig[]; setCo
   const [previewType, setPreviewType] = useState<ChannelType>('booking');
   const sendTest = useSendTest();
   const { session } = useStaffSession();
-  const canLinkWhatsApp = session?.role === 'Owner' || session?.role === 'Admin';
+  // Same rule as the server: linking WhatsApp needs Settings edit access
+  const canLinkWhatsApp = canAccess(session, 'settings', 'edit');
   const [editing, setEditing] = useState<ProviderKey | null>(null);
   const [clearing, setClearing] = useState<ProviderKey | null>(null);
   const configOf = (key: ProviderKey) => configs.find((c) => c.key === key)!;

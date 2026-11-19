@@ -1,11 +1,12 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Put, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, SignedIn, StaffOnly, type AuthPayload } from './auth.decorators';
 import { AcceptInviteDto, ChangePasswordDto, LoginDto, RegisterCustomerDto, StaffLoginDto } from './auth.dto';
 import { AuthService } from './auth.service';
-import { AREA_LABELS, AREAS, ROLE_PERMISSIONS } from './permissions';
+import { AREA_LABELS, AREAS, DEFAULT_PERMISSIONS, EDITABLE_ROLES } from './permissions';
+import { PermissionsService } from './permissions.service';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -13,6 +14,7 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly permissionsTable: PermissionsService,
   ) {}
 
   @Post('staff/login')
@@ -36,8 +38,32 @@ export class AuthController {
   @StaffOnly()
   @ApiBearerAuth()
   @ApiOperation({ summary: 'What every role can view or change, for the Settings → Permissions page' })
-  permissions() {
-    return { areas: AREAS.map((id) => ({ id, label: AREA_LABELS[id] })), roles: ROLE_PERMISSIONS };
+  permissions(@CurrentUser() me: AuthPayload) {
+    return {
+      areas: AREAS.map((id) => ({ id, label: AREA_LABELS[id] })),
+      roles: this.permissionsTable.table(),
+      defaults: DEFAULT_PERMISSIONS,
+      editableRoles: EDITABLE_ROLES,
+      // Only the Owner (Super Admin) may change access
+      canEdit: me.role === 'Owner',
+    };
+  }
+
+  @Put('permissions')
+  @StaffOnly('Owner')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Owner only: change what Admin, Manager and Staff can view or edit. Body: { roles: { Admin: { area: access } } }' })
+  async savePermissions(@Body() body: { roles?: unknown }, @CurrentUser() me: AuthPayload) {
+    return { roles: await this.permissionsTable.save(body?.roles, me.name) };
+  }
+
+  @Post('permissions/reset')
+  @HttpCode(200)
+  @StaffOnly('Owner')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Owner only: go back to KeyGo’s default access for every role' })
+  async resetPermissions() {
+    return { roles: await this.permissionsTable.reset() };
   }
 
   @Get('invite/:token')

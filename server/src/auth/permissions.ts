@@ -49,7 +49,8 @@ export const AREA_LABELS: Record<Area, string> = {
 
 const all = (access: Access): PermissionMap => Object.fromEntries(AREAS.map((a) => [a, access])) as PermissionMap;
 
-export const ROLE_PERMISSIONS: Record<StaffRoleLabel, PermissionMap> = {
+/** KeyGo's starting access for each role. The Owner can change Admin, Manager and Staff in Settings → Permissions. */
+export const DEFAULT_PERMISSIONS: Record<StaffRoleLabel, PermissionMap> = {
   Owner: all('edit'),
   Admin: all('edit'),
   Manager: {
@@ -75,7 +76,38 @@ export const ROLE_PERMISSIONS: Record<StaffRoleLabel, PermissionMap> = {
   Driver: all('none'),
 };
 
-export const permissionsFor = (role: StaffRoleLabel | undefined): PermissionMap => (role ? ROLE_PERMISSIONS[role] : all('none'));
+/** Roles whose access the Owner may change. Owner always has everything; Drivers only have their driver page. */
+export const EDITABLE_ROLES = ['Admin', 'Manager', 'Staff'] as const;
+export type EditableRole = (typeof EDITABLE_ROLES)[number];
+/** Settings document holding the Owner's changes; reserved, so the generic settings routes cannot touch it. */
+export const PERMISSIONS_SETTING = 'auth.permissions';
+
+/** The access in force: the defaults with the Owner's saved changes on top (kept in memory, see PermissionsService). */
+let current: Record<StaffRoleLabel, PermissionMap> = DEFAULT_PERMISSIONS;
+export const currentPermissions = () => current;
+
+const ACCESS: Access[] = ['none', 'view', 'edit'];
+
+/** Turns saved changes into a complete, valid table: unknown areas and values are ignored. */
+export function withOverrides(saved: unknown): Record<StaffRoleLabel, PermissionMap> {
+  const next = { ...DEFAULT_PERMISSIONS };
+  const obj = saved && typeof saved === 'object' ? (saved as Record<string, Record<string, unknown>>) : {};
+  for (const role of EDITABLE_ROLES) {
+    const row = { ...DEFAULT_PERMISSIONS[role] };
+    for (const area of AREAS) {
+      const v = obj[role]?.[area];
+      if (ACCESS.includes(v as Access)) row[area] = v as Access;
+    }
+    next[role] = row;
+  }
+  return next;
+}
+
+export function applyPermissions(table: Record<StaffRoleLabel, PermissionMap>) {
+  current = table;
+}
+
+export const permissionsFor = (role: StaffRoleLabel | undefined): PermissionMap => (role ? current[role] : all('none'));
 
 export const can = (role: StaffRoleLabel | undefined, area: Area, need: Access) => {
   const have = permissionsFor(role)[area];

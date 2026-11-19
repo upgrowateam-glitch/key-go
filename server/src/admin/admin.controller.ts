@@ -14,7 +14,11 @@ function ensure(me: AuthPayload, area: Area, access: Exclude<Access, 'none'>) {
   if (!can(me.role, area, access)) throw new ForbiddenException(`Your ${me.role} account cannot ${access === 'edit' ? 'change' : 'open'} ${AREA_LABELS[area]}.`);
 }
 
-const canReadSetting = (me: AuthPayload, key: string) => can(me.role, areaOfSetting(key), 'view') || (!isPrivateSetting(key) && can(me.role, 'settings', 'view'));
+/** Settings that only have their own routes (the permission table). */
+const reservedSetting = (key: string) => key.startsWith('auth.');
+
+const canReadSetting = (me: AuthPayload, key: string) =>
+  !reservedSetting(key) && (can(me.role, areaOfSetting(key), 'view') || (!isPrivateSetting(key) && can(me.role, 'settings', 'view')));
 
 /**
  * Admin portal data. Every route needs a staff token and checks the caller's permission for the area it touches.
@@ -140,14 +144,16 @@ export class AdminController {
   @Get('settings/:key')
   @ApiOperation({ summary: 'One settings document (null when it was never saved)' })
   async getSetting(@Param('key') key: string, @CurrentUser() me: AuthPayload) {
-    if (!canReadSetting(me, checkName('setting', key))) ensure(me, areaOfSetting(key), 'view');
+    if (reservedSetting(checkName('setting', key))) throw new ForbiddenException('See Settings → Permissions.');
+    if (!canReadSetting(me, key)) ensure(me, areaOfSetting(key), 'view');
     return { key, value: await this.store.setting(key, null) };
   }
 
   @Put('settings/:key')
   @ApiOperation({ summary: 'Save one settings document; the body is { value }' })
   async saveSetting(@Param('key') key: string, @Body() body: { value: unknown }, @CurrentUser() me: AuthPayload) {
-    ensure(me, areaOfSetting(checkName('setting', key)), 'edit');
+    if (reservedSetting(checkName('setting', key))) throw new ForbiddenException('Change access in Settings → Permissions.');
+    ensure(me, areaOfSetting(key), 'edit');
     return { key, value: await this.store.saveSetting(key, body?.value ?? null, me.name) };
   }
 }

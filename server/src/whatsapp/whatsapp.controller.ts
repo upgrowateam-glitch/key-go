@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsString, Matches } from 'class-validator';
-import { StaffOnly } from '../auth/auth.decorators';
+import { Can } from '../auth/auth.decorators';
 import { WhatsAppService } from './whatsapp.service';
 
 class TestMessageDto {
@@ -10,10 +10,10 @@ class TestMessageDto {
   phone: string;
 }
 
-/** Linking KeyGo's WhatsApp number (System → WhatsApp & SMS). Owners and Admins only. */
+/** Linking KeyGo's WhatsApp number (System → WhatsApp & SMS). Needs Settings edit access. */
 @ApiTags('admin')
 @ApiBearerAuth()
-@StaffOnly('Owner', 'Admin')
+@Can('settings', 'edit')
 @Controller('admin/whatsapp')
 export class WhatsAppController {
   constructor(private readonly whatsapp: WhatsAppService) {}

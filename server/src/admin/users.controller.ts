@@ -4,7 +4,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { User } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { CurrentUser, StaffOnly, type AuthPayload } from '../auth/auth.decorators';
+import { Can, CurrentUser, type AuthPayload } from '../auth/auth.decorators';
 import { newInvite, unusablePassword } from '../auth/invites';
 import { roleEnum, type StaffRoleLabel } from '../common/enums';
 import { StoreService } from '../domain/store.service';
@@ -71,7 +71,7 @@ const toApi = (u: User) => ({
 /** Staff accounts that can sign in to the admin portal. Owners and Admins manage them; only Owners manage Owners. */
 @ApiTags('admin')
 @ApiBearerAuth()
-@StaffOnly('Owner', 'Admin')
+@Can('users', 'edit')
 @Controller('admin/users')
 export class UsersController {
   constructor(
