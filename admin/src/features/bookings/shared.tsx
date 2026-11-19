@@ -1,4 +1,5 @@
 import React from 'react';
+import { allNames, masterLists } from '../../lib/catalog';
 import { StyleSheet, Text, View } from 'react-native';
 import { Bell, CheckCircle2, Send } from 'lucide-react-native';
 import { Avatar, Badge, Button, Card, StatusBadge, Tone, VehiclePhoto } from '../../components/kit';
@@ -15,8 +16,9 @@ export const TERM_FILTERS = ['All', ...TERMS] as const;
 export const PURPOSES: readonly RentalPurpose[] = ['Personal', 'Business', 'Outstation', 'Vacation'];
 export const CLASSIFICATIONS: readonly BookingClassification[] = ['Online', 'Walk-in', 'Corporate', 'Repeat customer', 'Referral'];
 export const CLASS_FILTERS = ['All', ...CLASSIFICATIONS] as const;
-export const CATEGORIES: readonly VehicleType[] = ['Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'];
-export const CATEGORY_FILTERS = ['All', ...CATEGORIES] as const;
+/** Car types from Settings → Master data. */
+export const vehicleTypeNames = (): VehicleType[] => allNames(masterLists().vehicleTypes);
+export const categoryFilters = () => ['All', ...vehicleTypeNames()];
 
 export const CLASS_TONE: Record<BookingClassification, Tone> = {
   Online: 'info',

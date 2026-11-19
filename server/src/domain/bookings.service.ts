@@ -2,12 +2,24 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { rethrowDbError } from '../common/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
+import { pricingRules, SETTING_PRICING, type PricingRules } from './catalog';
 import { bookingFromApi, bookingToApi, currentRate, ratesToApi, vehicleFromApi, vehicleToApi, type Json } from './mappers';
 
 /** Booking and vehicle writes shared by the admin and customer APIs. */
 @Injectable()
 export class BookingsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /** The Owner's pricing rules (Settings → Rental pricing), with defaults for anything not set. */
+  async pricing(): Promise<PricingRules> {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: SETTING_PRICING } });
+    return pricingRules(row?.value);
+  }
+
+  /** The prices a car is offered at under the given rules. */
+  ratesFor(v: Awaited<ReturnType<BookingsService['vehicleWithRates']>>, rules: PricingRules) {
+    return vehicleToApi(v, rules).rates as import('./pricing').Rates | undefined;
+  }
 
   async vehicleWithRates(id: string) {
     const v = await this.prisma.vehicle.findUnique({ where: { id }, include: { rates: true } });
@@ -17,7 +29,8 @@ export class BookingsService {
 
   async listVehicles(where: Prisma.VehicleWhereInput = {}) {
     const rows = await this.prisma.vehicle.findMany({ where, include: { rates: true }, orderBy: { createdAt: 'asc' } });
-    return rows.map(vehicleToApi);
+    const rules = await this.pricing();
+    return rows.map((v) => vehicleToApi(v, rules));
   }
 
   /** Creates or replaces a vehicle; a changed price is stored as a new rate row dated today. */
@@ -46,7 +59,7 @@ export class BookingsService {
     } catch (e) {
       rethrowDbError(e, { registration_no: 'vehicle number' });
     }
-    return vehicleToApi(await this.vehicleWithRates(id));
+    return vehicleToApi(await this.vehicleWithRates(id), await this.pricing());
   }
 
   async listBookings(where: Prisma.BookingWhereInput = {}) {

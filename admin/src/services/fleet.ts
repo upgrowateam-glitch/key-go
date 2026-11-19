@@ -1,9 +1,11 @@
 import { newId } from '../config/defaults';
+import { allNames, masterLists } from '../lib/catalog';
 import { serverDoc } from '../lib/serverState';
 import type { VerificationStatus } from '../types';
 
-export const VEHICLE_CATEGORIES = ['Economy', 'Standard', 'Premium', 'Luxury'] as const;
-export type VehicleCategory = (typeof VEHICLE_CATEGORIES)[number];
+/** Vehicle categories come from Settings → Master data. */
+export type VehicleCategory = string;
+export const vehicleCategories = () => allNames(masterLists().categories);
 
 /** A document file kept in the server's document storage (`key` is the stored file id). */
 export interface StoredFile {

@@ -1,7 +1,8 @@
 // Domain types for the KeyGo admin portal, matching the records the KeyGo server returns;
 // these shapes are intended to map 1:1 onto future backend API payloads.
 
-export type VehicleType = 'Hatchback' | 'SUV' | 'MUV' | 'Sedan' | 'Electric' | 'Luxury';
+/** Car type from the editable list in Settings → Master data, e.g. 'Hatchback' or 'SUV'. */
+export type VehicleType = string;
 export type CarKind = 'suv' | 'sedan' | 'sport' | 'ev';
 export type VehicleStatus = 'Available' | 'Reserved' | 'On Rent' | 'Maintenance' | 'Sold';
 
@@ -81,6 +82,10 @@ export interface Vehicle {
   photoKey?: string;
   /** Current price list; pricePerDay equals rates.daily. */
   rates?: VehicleRates;
+  /** The car's own weekly, monthly or deposit price; missing ones follow the pricing rules. */
+  customRates?: { weekly?: number; monthly?: number; deposit?: number };
+  /** Office the car belongs to (a name from Settings → Branches). */
+  branch?: string;
   imageAsset?: any;
   /** Attribution for `imageAsset` (real photos are Creative Commons licensed and must be credited). */
   photoCredit?: PhotoCredit;
@@ -336,6 +341,8 @@ export type AttendanceMark = 'P' | 'A' | 'L' | 'H' | 'W';
 
 export interface StaffPunch {
   id: string;
+  /** Set when this person has a sign-in account (Settings → Users & Roles); name, role and phone follow the account. */
+  userId?: string;
   staffName: string;
   role: string;
   phone: string;

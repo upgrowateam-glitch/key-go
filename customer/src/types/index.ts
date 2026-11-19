@@ -1,7 +1,8 @@
 // Domain types for the KeyGo rental UI. All data is local sample data for now;
 // these shapes are intended to map 1:1 onto future backend API payloads.
 
-export type VehicleType = 'Hatchback' | 'SUV' | 'MUV' | 'Sedan' | 'Electric' | 'Luxury';
+/** Car type from KeyGo's editable list, e.g. 'Hatchback' or 'SUV'. */
+export type VehicleType = string;
 export type CarKind = 'suv' | 'sedan' | 'sport' | 'ev';
 export type VehicleStatus = 'Available' | 'Reserved' | 'On Rent' | 'Maintenance' | 'Sold';
 

@@ -6,10 +6,11 @@ import { Avatar, Badge, Button, Card, ChipGroup, EmptyState, Field, FormRow, Sec
 import { useApp } from '../../context/AppContext';
 import { findConflicts } from '../../lib/availability';
 import { addDays, daysBetween, formatDate, formatINR } from '../../lib/format';
-import { computeQuote, PRICING_RULES, termForDays } from '../../lib/pricing';
+import { computeQuote, pricingRules, termForDays } from '../../lib/pricing';
+import { effectiveRates } from '../../lib/catalog';
 import { useThemeColors, useThemedStyles } from '../../theme';
 import type { BookingClassification, RentalPurpose, RentalTerm } from '../../types';
-import { CATEGORY_FILTERS, CLASSIFICATIONS, makeStyles, PURPOSES, QuoteLine, TERMS, TIME_RE, validDate, VehicleThumb } from './shared';
+import { categoryFilters, CLASSIFICATIONS, makeStyles, PURPOSES, QuoteLine, TERMS, TIME_RE, validDate, VehicleThumb } from './shared';
 
 type CustomerMode = 'Existing' | 'Walk-in';
 
@@ -24,7 +25,7 @@ export function CreateBookingTab() {
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [walkInName, setWalkInName] = useState('');
   const [walkInPhone, setWalkInPhone] = useState('');
-  const [category, setCategory] = useState<(typeof CATEGORY_FILTERS)[number]>('All');
+  const [category, setCategory] = useState<string>('All');
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [pickupLocation, setPickupLocation] = useState('Bengaluru International Airport (BLR)');
   const [pickupDate, setPickupDate] = useState(addDays(today, 3));
@@ -178,9 +179,9 @@ export function CreateBookingTab() {
               <Text style={styles.link}>Use suggested term ({suggestedTerm})</Text>
             </TouchableOpacity>
           ) : null}
-          {days >= 1 && days < PRICING_RULES.minDays[term] ? (
+          {days >= 1 && days < pricingRules().minDays[term] ? (
             <Text style={[styles.hint, { color: colors.warmText }]}>
-              {term} term is normally for {PRICING_RULES.minDays[term]}+ days.
+              {term} term is normally for {pricingRules().minDays[term]}+ days.
             </Text>
           ) : null}
 
@@ -204,7 +205,7 @@ export function CreateBookingTab() {
       <Section title="Vehicle" subtitle="Availability is checked against the dates and times above">
         <Card>
           <View style={{ marginBottom: 10 }}>
-            <ChipGroup options={CATEGORY_FILTERS} value={category} onChange={setCategory} scroll />
+            <ChipGroup options={categoryFilters()} value={category} onChange={setCategory} scroll />
           </View>
           <View style={[styles.pickList, !!err('vehicle') && { borderColor: colors.danger }]}>
             {bookable.length === 0 ? (
@@ -271,10 +272,10 @@ export function CreateBookingTab() {
       {quote ? (
         <>
           <QuoteLine label={`Base (${formatINR(quote.ratePerDay)} × ${quote.days} days)`} value={formatINR(quote.base)} />
-          <QuoteLine label={`${term} term discount (${Math.round(PRICING_RULES.termDiscount[term] * 100)}%)`} value={quote.termDiscount ? formatINR(-quote.termDiscount) : formatINR(0)} tone="discount" />
+          <QuoteLine label={`${term} term discount (${quote.base ? Math.round((quote.termDiscount / quote.base) * 100) : 0}%)`} value={quote.termDiscount ? formatINR(-quote.termDiscount) : formatINR(0)} tone="discount" />
           <QuoteLine label="Manual discount" value={quote.manualDiscount ? formatINR(-quote.manualDiscount) : formatINR(0)} tone="discount" />
           <QuoteLine label="Subtotal" value={formatINR(quote.subtotal)} />
-          <QuoteLine label={`GST (${Math.round(PRICING_RULES.taxRate * 100)}%)`} value={formatINR(quote.tax)} />
+          <QuoteLine label={`GST (${Math.round(pricingRules().taxRate * 100)}%)`} value={formatINR(quote.tax)} />
           <View style={styles.quoteDivider} />
           <QuoteLine label="Total" value={formatINR(quote.total)} strong />
           <QuoteLine label="Refundable security deposit" value={formatINR(quote.deposit)} />
@@ -287,8 +288,10 @@ export function CreateBookingTab() {
           <View style={styles.quoteDivider} />
           <Text style={[styles.fieldLabel, { marginTop: 4 }]}>Rates for {vehicle.name}</Text>
           {TERMS.map((t) => {
-            const perDay = Math.round(vehicle.pricePerDay * (1 - PRICING_RULES.termDiscount[t]));
-            const length = PRICING_RULES.minDays[t];
+            // The car's own weekly/monthly price if set, otherwise the daily price less the term discount
+            const r = effectiveRates(vehicle);
+            const perDay = t === 'Weekly' ? Math.round(r.weekly / 7) : t === 'Monthly' ? Math.round(r.monthly / 30) : r.daily;
+            const length = pricingRules().minDays[t];
             return <QuoteLine key={t} label={`${t} (${formatINR(perDay)}/day)`} value={t === 'Daily' ? `${formatINR(perDay)}/day` : `${formatINR(perDay * length)}/${length}d`} />;
           })}
         </>

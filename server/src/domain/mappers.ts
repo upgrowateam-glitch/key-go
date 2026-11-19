@@ -11,9 +11,9 @@ import {
   termEnum,
   transmissionEnum,
   vehicleStatusEnum,
-  vehicleTypeEnum,
   verificationEnum,
 } from '../common/enums';
+import { customRatesOf, DEFAULT_PRICING, effectiveRates, type PricingRules } from './catalog';
 import { ratesFromDaily, type Rates } from './pricing';
 
 /** A JSON object sent by one of the apps. */
@@ -67,12 +67,16 @@ const vehicleDefaults = (type: string): Json => ({
   fastagBalance: 0,
 });
 
-export function vehicleToApi(v: VehicleWithRates): Json {
-  const type = vehicleTypeEnum.fromDb(v.type);
-  const rates = ratesToApi(currentRate(v.rates));
+/** A vehicle for the apps. Weekly, monthly and deposit follow the pricing rules unless the car has its own prices. */
+export function vehicleToApi(v: VehicleWithRates, rules: PricingRules = DEFAULT_PRICING): Json {
+  const type = v.type;
+  const details = asObject(v.details);
+  const stored = ratesToApi(currentRate(v.rates));
+  const rates = stored && effectiveRates(stored.daily, stored.driverPerDay, type, customRatesOf(details), rules);
   return {
     ...vehicleDefaults(type),
-    ...asObject(v.details),
+    ...details,
+    customRates: customRatesOf(details),
     id: v.id,
     name: v.name,
     brand: v.brand ?? undefined,
@@ -101,6 +105,13 @@ export function vehicleToApi(v: VehicleWithRates): Json {
   };
 }
 
+/** Car type from the editable list; any short name is accepted so older apps keep working. */
+function vehicleType(v: unknown) {
+  const t = str(v).slice(0, 40);
+  if (!t) throw new BadRequestException('Choose a car type.');
+  return t;
+}
+
 export interface VehicleInput {
   data: Omit<Prisma.VehicleUncheckedCreateInput, 'id'>;
   /** Price list to store, when the body carried one or changed the daily price. */
@@ -126,7 +137,7 @@ export function vehicleFromApi(body: Json, existingRates?: Rates): VehicleInput 
       data: {
         name,
         brand: optStr(body.brand),
-        type: vehicleTypeEnum.toDb(body.type),
+        type: vehicleType(body.type),
         color: optStr(body.color),
         seats: int(body.seats, 5),
         transmission: transmissionEnum.toDb(body.transmission),

@@ -1,5 +1,5 @@
 import { useRouter } from '@/shims/expo-router';
-import { Car, IndianRupee, Link2, Navigation, RotateCcw, Star, UserCheck, Users } from 'lucide-react-native';
+import { Car, IndianRupee, Link2, Navigation, Pencil, Plus, RotateCcw, Star, Trash2, UserCheck, Users } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
@@ -31,6 +31,7 @@ import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { Driver } from '../../types';
 import { CsvButton, FilterGroup, ListToolbar, Pager, SearchField, usePaged } from '../finance/tableTools';
 import { AssignDriverSheet, licenceState } from './AssignDriverSheet';
+import { DriverForm } from './DriverForm';
 
 const DUTY_OPTIONS = ['On Duty', 'On Trip', 'Off Duty'] as const;
 const DUTY_FILTERS = ['All', ...DUTY_OPTIONS] as const;
@@ -45,6 +46,7 @@ export default function DriversTab() {
   const [query, setQuery] = useState('');
   const [duty, setDuty] = useState<(typeof DUTY_FILTERS)[number]>('All');
   const [sort, setSort] = useState<(typeof SORTS)[number]>('Name');
+  const [adding, setAdding] = useState(false);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -120,14 +122,17 @@ export default function DriversTab() {
     <EmptyState
       compact
       title={drivers.length ? 'No matching drivers' : 'No drivers yet'}
-      message={drivers.length ? 'Nothing matches these filters.' : 'Driver profiles will appear here.'}
+      message={drivers.length ? 'Nothing matches these filters.' : 'Add your first driver to assign them to bookings.'}
       icon={(c) => <Users size={22} color={c} />}
-      action={filtered ? <Button label="Clear filters" variant="outline" size="sm" onPress={reset} /> : undefined}
+      action={filtered ? <Button label="Clear filters" variant="outline" size="sm" onPress={reset} /> : <Button label="Add driver" size="sm" icon={(c) => <Plus size={14} color={c} />} onPress={() => setAdding(true)} />}
     />
   );
 
   const list = (
-    <Section title="Drivers" subtitle={`${rows.length} chauffeurs · tap a driver for details`}>
+    <Section
+      title="Drivers"
+      subtitle={`${rows.length} chauffeurs · tap a driver for details`}
+      action={<Button label="Add driver" size="sm" icon={(c) => <Plus size={14} color={c} />} onPress={() => setAdding(true)} />}>
       <ListToolbar search={<SearchField value={query} onChange={setQuery} placeholder="Name, phone, licence or vehicle" />}>
         <FilterGroup label="Duty">
           <SegmentedControl options={DUTY_FILTERS} value={duty} onChange={setDuty} />
@@ -161,7 +166,7 @@ export default function DriversTab() {
     </Section>
   );
 
-  const detail = selected ? <DriverDetail key={selected.id} driver={selected} onAssign={() => setAssignFor(selected.id)} /> : null;
+  const detail = selected ? <DriverDetail key={selected.id} driver={selected} onAssign={() => setAssignFor(selected.id)} onDeleted={() => setSelectedId(null)} /> : null;
 
   return (
     <View>
@@ -179,6 +184,7 @@ export default function DriversTab() {
       </FormSheet>
 
       {assignFor ? <AssignDriverSheet driverId={assignFor} onClose={() => setAssignFor(null)} /> : null}
+      {adding ? <DriverForm onClose={() => setAdding(false)} onSaved={(d) => setSelectedId(d.id)} /> : null}
     </View>
   );
 }
@@ -215,11 +221,15 @@ function DriverCard({ driver: d, today, onPress }: { driver: Driver; today: stri
   );
 }
 
-function DriverDetail({ driver: d, onAssign }: { driver: Driver; onAssign: () => void }) {
+function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAssign: () => void; onDeleted: () => void }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
-  const { today, updateDriver, showToast } = useApp();
+  const { today, updateDriver, removeDriver, bookings, showToast } = useApp();
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  // A driver on an upcoming or active booking cannot be deleted
+  const openTrips = bookings.filter((b) => b.driverId === d.id && (b.status === 'Confirmed' || b.status === 'Active')).length;
   const [pctText, setPctText] = useState(String(d.commissionPercent));
   const [pendingDuty, setPendingDuty] = useState<Driver['dutyStatus'] | null>(null);
 
@@ -261,6 +271,25 @@ function DriverDetail({ driver: d, onAssign }: { driver: Driver; onAssign: () =>
           </View>
           <StatusBadge status={d.dutyStatus} />
         </View>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <Button label="Edit details" size="sm" variant="outline" icon={(c) => <Pencil size={13} color={c} />} onPress={() => setEditing(true)} />
+          <Button label="Delete" size="sm" variant="danger" icon={(c) => <Trash2 size={13} color={c} />} onPress={() => (openTrips ? showToast(`${d.name} is on ${openTrips} upcoming or active booking(s). Reassign them first.`) : setConfirmDelete(true))} />
+        </View>
+        {editing ? <DriverForm driver={d} onClose={() => setEditing(false)} /> : null}
+        <ConfirmDialog
+          visible={confirmDelete}
+          title={`Delete ${d.name}?`}
+          message="Their driver record is removed. Past bookings keep the driver’s name. If they have a Driver sign-in, delete it in Settings → Users & Roles too."
+          confirmLabel="Delete driver"
+          danger
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            removeDriver(d.id);
+            showToast(`${d.name} deleted`);
+            onDeleted();
+          }}
+        />
         <Divider />
         <Text style={styles.label}>Duty status</Text>
         <SegmentedControl options={DUTY_OPTIONS} value={d.dutyStatus} onChange={(s) => (s === d.dutyStatus ? undefined : setPendingDuty(s))} />

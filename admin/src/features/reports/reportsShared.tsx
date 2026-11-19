@@ -1,4 +1,5 @@
 import React, { createContext, ReactNode, useContext, useMemo, useState } from 'react';
+import { allNames, masterLists } from '../../lib/catalog';
 import { StyleSheet, Text, View } from 'react-native';
 import { CalendarRange, FileDown, FileSpreadsheet, IndianRupee, RotateCcw, Route, TrendingDown, TrendingUp } from 'lucide-react-native';
 import { BarChart, Button, Card, ChipGroup, Grid, SegmentedControl, StatTile } from '../../components/kit';
@@ -14,8 +15,8 @@ import { sumCategories, TREND_MONTHS, useLedger } from '../finance/useLedger';
 
 export const PERIODS = ['Daily', 'Weekly', 'Monthly'] as const;
 export type ReportPeriod = (typeof PERIODS)[number];
-const CATEGORIES = ['All', 'Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
-type CategoryFilter = (typeof CATEGORIES)[number];
+const typeFilters = () => ['All', ...allNames(masterLists().vehicleTypes)];
+type CategoryFilter = string;
 
 export interface Bucket {
   label: string;
@@ -186,7 +187,7 @@ export function ReportFrame({ name, csv, children }: { name: string; csv: () => 
           </View>
           <View style={{ gap: 6, flex: 1 }}>
             <Text style={styles.filterLabel}>Vehicle category</Text>
-            <ChipGroup options={CATEGORIES} value={r.category} onChange={r.setCategory} scroll={isPhone} />
+            <ChipGroup options={typeFilters()} value={r.category} onChange={r.setCategory} scroll={isPhone} />
           </View>
           <Button
             label="Reset"

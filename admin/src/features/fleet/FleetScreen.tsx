@@ -23,7 +23,8 @@ import { findSection } from '../../config/navigation';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { formatDate, formatINR, formatKm } from '../../lib/format';
-import { categoryOf, loadFleetExtras, readFleetExtras, VEHICLE_CATEGORIES } from '../../services/fleet';
+import { categoryOf, loadFleetExtras, readFleetExtras, vehicleCategories } from '../../services/fleet';
+import { allNames, masterLists } from '../../lib/catalog';
 import { useResource } from '../../services/mockClient';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 import { Vehicle, VehicleStatus } from '../../types';
@@ -34,10 +35,8 @@ import { FilterBar, FilterOptions, type ActiveFilter } from './FilterBar';
 
 const STATUS_FILTERS = ['All', 'Available', 'Reserved', 'On Rent', 'Maintenance', 'Sold'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
-const TYPE_FILTERS = ['All types', 'Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
-type TypeFilter = (typeof TYPE_FILTERS)[number];
-const CATEGORY_FILTERS = ['All categories', ...VEHICLE_CATEGORIES] as const;
-type CategoryFilter = (typeof CATEGORY_FILTERS)[number];
+type TypeFilter = string;
+type CategoryFilter = string;
 const SORT_KEYS = ['Name', 'Registration', 'Daily rate', 'Odometer', 'Insurance expiry'] as const;
 type SortKey = (typeof SORT_KEYS)[number];
 const SORTERS: Record<SortKey, (a: Vehicle, b: Vehicle) => number> = {
@@ -67,6 +66,11 @@ export default function FleetScreen() {
   useEffect(() => setStatus(statusFromLink), [statusFromLink]);
   const [type, setType] = useState<TypeFilter>('All types');
   const [category, setCategory] = useState<CategoryFilter>('All categories');
+  const [branch, setBranch] = useState('All branches');
+  // Filters list every type, category and branch in the master lists and on the cars
+  const TYPE_FILTERS = useMemo(() => ['All types', ...Array.from(new Set([...allNames(masterLists().vehicleTypes), ...vehicles.map((v) => v.type)]))], [vehicles]);
+  const CATEGORY_FILTERS = useMemo(() => ['All categories', ...vehicleCategories()], []);
+  const BRANCH_FILTERS = useMemo(() => ['All branches', ...Array.from(new Set(vehicles.map((v) => v.branch ?? 'No branch')))], [vehicles]);
   const [sort, setSort] = useState<SortKey>('Name');
   const [formOpen, setFormOpen] = useState(false);
 
@@ -83,15 +87,17 @@ export default function FleetScreen() {
         if (status !== 'All' && v.status !== status) return false;
         if (type !== 'All types' && v.type !== type) return false;
         if (category !== 'All categories' && extras.data && categoryOf(extras.data, v.id) !== category) return false;
+        if (branch !== 'All branches' && (v.branch ?? 'No branch') !== branch) return false;
         if (!q) return true;
         const hay = [v.name, v.vehicleNumber, v.id, v.brand ?? ''].join('|').toLowerCase().replace(/\s+/g, '');
         return hay.includes(q);
       })
       .sort(SORTERS[sort]);
-  }, [vehicles, query, status, type, category, sort, extras.data]);
+  }, [vehicles, query, status, type, category, branch, sort, extras.data]);
   const paged = usePaged(filtered);
 
   const activeFilters: ActiveFilter[] = [
+    ...(branch !== 'All branches' ? [{ key: 'branch', label: `Branch: ${branch}`, onClear: () => setBranch('All branches') }] : []),
     ...(status !== 'All' ? [{ key: 'status', label: `Status: ${status}`, onClear: () => setStatus('All') }] : []),
     ...(type !== 'All types' ? [{ key: 'type', label: `Type: ${type}`, onClear: () => setType('All types') }] : []),
     ...(category !== 'All categories' ? [{ key: 'category', label: `Category: ${category}`, onClear: () => setCategory('All categories') }] : []),
@@ -101,6 +107,7 @@ export default function FleetScreen() {
     setStatus('All');
     setType('All types');
     setCategory('All categories');
+    setBranch('All branches');
   };
 
   const openVehicle = (v: Vehicle) => router.push(`/fleet/${encodeURIComponent(v.id)}` as any);
@@ -232,7 +239,7 @@ export default function FleetScreen() {
         <View style={{ marginTop: 4, marginBottom: 12 }}>
           <Text style={styles.filterLabel}>Vehicle categories</Text>
           <Grid cols={cols(2, 4, 4)}>
-            {VEHICLE_CATEGORIES.map((c) => {
+            {vehicleCategories().map((c) => {
               const inCategory = vehicles.filter((v) => categoryOf(extras.data!, v.id) === c);
               return (
                 <StatTile
@@ -266,6 +273,7 @@ export default function FleetScreen() {
               <FilterOptions label="Status" options={STATUS_FILTERS} value={status} onChange={setStatus} />
               <FilterOptions label="Type" options={TYPE_FILTERS} value={type} onChange={setType} />
               <FilterOptions label="Category" options={CATEGORY_FILTERS} value={category} onChange={setCategory} />
+              {BRANCH_FILTERS.length > 2 ? <FilterOptions label="Branch" options={BRANCH_FILTERS} value={branch} onChange={setBranch} /> : null}
             </>
           }
         />

@@ -2,7 +2,7 @@
  * KeyGo's fleet: the 7 vehicles and their price lists. Used by the seed (to create them on a new database)
  * and by remove-sample-data (to fill in their details on an existing one). Rupee amounts.
  */
-import { Transmission, VehicleType } from '@prisma/client';
+import { Transmission } from '@prisma/client';
 
 const PHOTO_SET = ['Front', 'Rear', 'Left side', 'Right side', 'Interior', 'Dashboard'];
 
@@ -10,7 +10,7 @@ export interface FleetVehicle {
   id: string;
   name: string;
   brand: string;
-  type: VehicleType;
+  type: string;
   color: string;
   seats: number;
   transmission: Transmission;
@@ -31,49 +31,49 @@ export interface FleetVehicle {
 
 export const FLEET: FleetVehicle[] = [
   {
-    id: 'car-1', name: 'Innova Crysta', brand: 'Toyota', type: VehicleType.MUV, color: '#F2F2F0', seats: 7, transmission: Transmission.MANUAL, fuel: 'Diesel',
+    id: 'car-1', name: 'Innova Crysta', brand: 'Toyota', type: 'MUV', color: '#F2F2F0', seats: 7, transmission: Transmission.MANUAL, fuel: 'Diesel',
     registrationNo: 'KA 01 MX 4921', purchaseCost: 1850000, purchaseDate: '2024-03-15', odometerKm: 28610, fuelLevelPercent: 72,
     gpsDeviceId: 'GPS-NVX-8012', fastagId: 'FT-60091823', insurance: ['HDFC ERGO', 'INS-HDFC-994102', '2027-03-14'], puc: ['PUC-KA01-77120', '2027-02-10'],
     rates: { daily: 3999, weekly: 25199, monthly: 89999, deposit: 10000, driverPerDay: 1000 },
     details: { kind: 'suv', photoKey: 'fleet_innova_crysta', photoLabels: PHOTO_SET, fastagBalance: 1890, loanDetails: { bankName: 'HDFC Bank Auto Loan', accountNo: 'LN-99201488', emiAmount: 24500, tenureMonths: 60, paidMonths: 18 } },
   },
   {
-    id: 'car-2', name: 'Virtus', brand: 'Volkswagen', type: VehicleType.SEDAN, color: '#5A3420', seats: 5, transmission: Transmission.AUTO, fuel: 'Petrol',
+    id: 'car-2', name: 'Virtus', brand: 'Volkswagen', type: 'Sedan', color: '#5A3420', seats: 5, transmission: Transmission.AUTO, fuel: 'Petrol',
     registrationNo: 'KA 05 EV 9012', purchaseCost: 2100000, purchaseDate: '2024-06-20', odometerKm: 14200, fuelLevelPercent: 92,
     gpsDeviceId: 'GPS-VLT-3301', fastagId: 'FT-88910244', insurance: ['ICICI Lombard', 'INS-ICICI-88192', '2027-06-19'], puc: ['PUC-KA05-55120', '2027-06-19'],
     rates: { daily: 2799, weekly: 17599, monthly: 62999, deposit: 7000, driverPerDay: 900 },
     details: { kind: 'sedan', photoKey: 'fleet_virtus', photoLabels: PHOTO_SET.slice(0, 4), fastagBalance: 2640, loanDetails: { bankName: 'ICICI EV Green Loan', accountNo: 'LN-7741029', emiAmount: 28900, tenureMonths: 48, paidMonths: 12 } },
   },
   {
-    id: 'car-3', name: 'Thar', brand: 'Mahindra', type: VehicleType.SUV, color: '#141414', seats: 4, transmission: Transmission.MANUAL, fuel: 'Diesel',
+    id: 'car-3', name: 'Thar', brand: 'Mahindra', type: 'SUV', color: '#141414', seats: 4, transmission: Transmission.MANUAL, fuel: 'Diesel',
     registrationNo: 'MH 02 GT 7007', purchaseCost: 6500000, purchaseDate: '2023-11-10', odometerKm: 34100, fuelLevelPercent: 65,
     gpsDeviceId: 'GPS-GT400-007', fastagId: 'FT-10029988', insurance: ['Tata AIG', 'INS-TATA-77401', '2026-11-09'], puc: ['PUC-MH02-11893', '2026-10-15'],
     rates: { daily: 3499, weekly: 21999, monthly: 79999, deposit: 10000, driverPerDay: 1000 },
     details: { kind: 'suv', photoKey: 'fleet_thar', photoLabels: PHOTO_SET, fastagBalance: 3450, loanDetails: { bankName: 'Axis Bank Luxury Auto', accountNo: 'LN-1104882', emiAmount: 85000, tenureMonths: 60, paidMonths: 22 } },
   },
   {
-    id: 'car-4', name: 'Swift', brand: 'Maruti Suzuki', type: VehicleType.HATCHBACK, color: '#C8102E', seats: 5, transmission: Transmission.MANUAL, fuel: 'Petrol',
+    id: 'car-4', name: 'Swift', brand: 'Maruti Suzuki', type: 'Hatchback', color: '#C8102E', seats: 5, transmission: Transmission.MANUAL, fuel: 'Petrol',
     registrationNo: 'KA 03 MS 2210', purchaseCost: 1200000, purchaseDate: '2024-01-05', odometerKm: 41900, fuelLevelPercent: 90,
     gpsDeviceId: 'GPS-KST-9102', fastagId: 'FT-33299104', insurance: ['SBI General', 'INS-SBI-33019', '2027-01-04'], puc: ['PUC-KA03-44102', '2026-10-05'],
     rates: { daily: 1799, weekly: 11299, monthly: 39999, deposit: 5000, driverPerDay: 800 },
     details: { kind: 'sedan', photoKey: 'fleet_swift', photoLabels: PHOTO_SET.slice(0, 5), fastagBalance: 740, loanDetails: { bankName: 'SBI Auto Finance', accountNo: 'LN-4481902', emiAmount: 16200, tenureMonths: 60, paidMonths: 20 } },
   },
   {
-    id: 'car-5', name: 'Baleno', brand: 'Maruti Suzuki', type: VehicleType.HATCHBACK, color: '#141414', seats: 5, transmission: Transmission.AUTO, fuel: 'Petrol',
+    id: 'car-5', name: 'Baleno', brand: 'Maruti Suzuki', type: 'Hatchback', color: '#141414', seats: 5, transmission: Transmission.AUTO, fuel: 'Petrol',
     registrationNo: 'DL 01 TR 8812', purchaseCost: 1650000, purchaseDate: '2024-02-12', odometerKm: 22150, fuelLevelPercent: 70,
     gpsDeviceId: 'GPS-MTR-5510', fastagId: 'FT-44910233', insurance: ['Bajaj Allianz', 'INS-BAJAJ-55190', '2027-02-11'], puc: ['PUC-DL01-90023', '2027-01-30'],
     rates: { daily: 1999, weekly: 12599, monthly: 44999, deposit: 5000, driverPerDay: 800 },
     details: { kind: 'sedan', photoKey: 'fleet_baleno', photoLabels: PHOTO_SET, fastagBalance: 1210 },
   },
   {
-    id: 'car-7', name: 'WagonR', brand: 'Maruti Suzuki', type: VehicleType.HATCHBACK, color: '#1F4FC9', seats: 5, transmission: Transmission.MANUAL, fuel: 'CNG',
+    id: 'car-7', name: 'WagonR', brand: 'Maruti Suzuki', type: 'Hatchback', color: '#1F4FC9', seats: 5, transmission: Transmission.MANUAL, fuel: 'CNG',
     registrationNo: 'KA 51 MJ 3307', purchaseCost: 1650000, purchaseDate: '2024-02-12', odometerKm: 22150, fuelLevelPercent: 70,
     gpsDeviceId: 'GPS-WGR-3307', fastagId: 'FT-71200455', insurance: ['Bajaj Allianz', 'INS-BAJAJ-55191', '2027-02-11'], puc: ['PUC-KA51-90024', '2027-01-30'],
     rates: { daily: 1499, weekly: 9449, monthly: 32999, deposit: 5000, driverPerDay: 800 },
     details: { kind: 'sedan', photoKey: 'fleet_wagonr', photoLabels: PHOTO_SET, fastagBalance: 1210 },
   },
   {
-    id: 'car-8', name: 'Creta', brand: 'Hyundai', type: VehicleType.SUV, color: '#F2F2F0', seats: 5, transmission: Transmission.AUTO, fuel: 'Diesel',
+    id: 'car-8', name: 'Creta', brand: 'Hyundai', type: 'SUV', color: '#F2F2F0', seats: 5, transmission: Transmission.AUTO, fuel: 'Diesel',
     registrationNo: 'KA 03 NC 6620', purchaseCost: 1650000, purchaseDate: '2024-02-12', odometerKm: 22150, fuelLevelPercent: 70,
     gpsDeviceId: 'GPS-CRT-6620', fastagId: 'FT-80233197', insurance: ['Bajaj Allianz', 'INS-BAJAJ-55192', '2027-02-11'], puc: ['PUC-KA03-90025', '2027-01-30'],
     rates: { daily: 2999, weekly: 18899, monthly: 66999, deposit: 8000, driverPerDay: 900 },

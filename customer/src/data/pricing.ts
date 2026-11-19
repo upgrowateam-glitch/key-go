@@ -17,7 +17,10 @@ export interface VehicleRates {
 /** GST applied to the rental amount. */
 export const TAX_RATE = 0.18;
 
-/** The vehicle's price list; a vehicle without one is priced from its daily rate. */
+/**
+ * The vehicle's price list as worked out by the server (its own prices, or the daily price less KeyGo's
+ * weekly/monthly discount). A vehicle without one is priced from its daily rate with the usual discounts.
+ */
 export function ratesFor(vehicle: { pricePerDay: number; rates?: VehicleRates }): VehicleRates {
   return (
     vehicle.rates ?? {

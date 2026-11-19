@@ -2,17 +2,21 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, ChipGroup, Field, FormRow, FormSheet, SegmentedControl, SimulatedNote, ToggleRow } from '../../components/kit';
 import { useApp } from '../../context/AppContext';
-import { saveVehicleCategory, VEHICLE_CATEGORIES, VehicleCategory } from '../../services/fleet';
+import { saveVehicleCategory, VehicleCategory } from '../../services/fleet';
+import { activeNames, masterLists } from '../../lib/catalog';
+import { branchesStore } from '../../services/settings';
+import { useResource } from '../../services/mockClient';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 import { CarKind, Vehicle, VehicleType } from '../../types';
 import { ISO_DATE, num } from './shared';
 
-const VEHICLE_TYPES = ['Hatchback', 'Sedan', 'SUV', 'MUV', 'Electric', 'Luxury'] as const;
-const FUEL_TYPES = ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'CNG'] as const;
-type FuelType = (typeof FUEL_TYPES)[number];
+type FuelType = string;
+const NO_BRANCH = 'No branch';
 const TRANSMISSIONS = ['Auto', 'Manual'] as const;
 
-const KIND_BY_TYPE: Record<VehicleType, CarKind> = { Hatchback: 'sedan', SUV: 'suv', MUV: 'suv', Sedan: 'sedan', Electric: 'ev', Luxury: 'sport' };
+/** Drawing used for the car when it has no photo; new types look like a sedan. */
+const KIND_BY_TYPE: Record<string, CarKind> = { Hatchback: 'sedan', SUV: 'suv', MUV: 'suv', Sedan: 'sedan', Electric: 'ev', Luxury: 'sport' };
+const kindFor = (type: VehicleType): CarKind => KIND_BY_TYPE[type] ?? 'sedan';
 /** Paint colour is vehicle content (not theme); new vehicles start with a neutral graphite until edited. */
 const DEFAULT_PAINT = '#5B6770';
 /** New vehicles are parked at the main hub until the GPS device reports (simulated). */
@@ -26,6 +30,7 @@ interface FormState {
   type: VehicleType;
   category: VehicleCategory;
   fuel: FuelType;
+  branch: string;
   transmission: (typeof TRANSMISSIONS)[number];
   seats: string;
   purchaseDate: string;
@@ -53,9 +58,10 @@ const initialForm = (today: string, v?: Vehicle, category?: VehicleCategory): Fo
   name: v?.name ?? '',
   brand: v?.brand ?? '',
   number: v?.vehicleNumber ?? '',
-  type: v?.type ?? 'SUV',
-  category: category ?? 'Standard',
-  fuel: (FUEL_TYPES as readonly string[]).includes(v?.fuel ?? '') ? (v!.fuel as FuelType) : 'Petrol',
+  type: v?.type ?? activeNames(masterLists().vehicleTypes)[0] ?? 'SUV',
+  category: category ?? (activeNames(masterLists().categories).includes('Standard') ? 'Standard' : activeNames(masterLists().categories)[0] ?? 'Standard'),
+  fuel: v?.fuel ?? activeNames(masterLists().fuelTypes)[0] ?? 'Petrol',
+  branch: v?.branch ?? NO_BRANCH,
   transmission: v?.transmission ?? 'Auto',
   seats: String(v?.seats ?? 5),
   purchaseDate: v?.purchaseDate ?? today,
@@ -93,6 +99,9 @@ export function VehicleForm({
   const { vehicles, addVehicle, updateVehicle, today, showToast } = useApp();
   const [form, setForm] = useState<FormState>(() => initialForm(today, vehicle, category));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
+  // Offices from Settings → Branches (active ones), plus the car's current branch
+  const branches = useResource(branchesStore.load);
+  const branchOptions = Array.from(new Set([NO_BRANCH, ...(branches.data ?? []).filter((b) => b.active).map((b) => b.name), ...(vehicle?.branch ? [vehicle.branch] : [])]));
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((f) => ({ ...f, [key]: value }));
@@ -131,7 +140,8 @@ export function VehicleForm({
       name: form.name.trim(),
       brand: form.brand.trim() || undefined,
       type: form.type,
-      kind: KIND_BY_TYPE[form.type],
+      kind: kindFor(form.type),
+      branch: form.branch === NO_BRANCH ? undefined : form.branch,
       pricePerDay: Math.round(num(form.pricePerDay)),
       seats: Math.round(num(form.seats)),
       transmission: form.transmission,
@@ -199,15 +209,19 @@ export function VehicleForm({
       <Field label="Registration number" required value={form.number} onChangeText={(t) => set('number', t)} placeholder="e.g. KA 01 AB 1234" error={errors.number} />
       <Text style={styles.fieldLabel}>Type</Text>
       <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={VEHICLE_TYPES} value={form.type} onChange={(t) => set('type', t)} />
+        <ChipGroup options={activeNames(masterLists().vehicleTypes, vehicle?.type)} value={form.type} onChange={(t) => set('type', t)} />
       </View>
       <Text style={styles.fieldLabel}>Category</Text>
       <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={VEHICLE_CATEGORIES} value={form.category} onChange={(t) => set('category', t)} />
+        <ChipGroup options={activeNames(masterLists().categories, category)} value={form.category} onChange={(t) => set('category', t)} />
       </View>
       <Text style={styles.fieldLabel}>Fuel type</Text>
       <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={FUEL_TYPES} value={form.fuel} onChange={(t) => set('fuel', t)} />
+        <ChipGroup options={activeNames(masterLists().fuelTypes, vehicle?.fuel)} value={form.fuel} onChange={(t) => set('fuel', t)} />
+      </View>
+      <Text style={styles.fieldLabel}>Branch</Text>
+      <View style={{ marginBottom: 14 }}>
+        <ChipGroup options={branchOptions} value={form.branch} onChange={(t) => set('branch', t)} />
       </View>
       <FormRow>
         <View style={{ marginBottom: 14 }}>

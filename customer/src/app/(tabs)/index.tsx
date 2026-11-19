@@ -54,9 +54,9 @@ const MARQUEE_BRANDS = [...BASE_BRANDS, ...BASE_BRANDS, ...BASE_BRANDS];
 const BRAND_ITEM_WIDTH = 96 + 12;
 const SINGLE_BRAND_LOOP_LEN = BASE_BRANDS.length * BRAND_ITEM_WIDTH;
 
-const CATEGORIES = ['All', 'Hatchback', 'Sedan', 'SUV', 'MUV'] as const;
-type Category = (typeof CATEGORIES)[number];
-const CATEGORY_ICONS: Record<Category, typeof Car> = { All: LayoutGrid, Hatchback: Car, Sedan: Car, SUV: CarFront, MUV: Gem };
+type Category = string;
+// Icon per car type; types KeyGo adds later use the plain car icon
+const CATEGORY_ICONS: Record<string, typeof Car> = { All: LayoutGrid, Hatchback: Car, Sedan: Car, SUV: CarFront, MUV: Gem };
 
 const CARD_WIDTH = 296;
 const CARD_GAP = 16;
@@ -153,7 +153,9 @@ export default function HomeScreen() {
   );
 
   // ---------- Catalog filtering ----------
-  const category: Category = (CATEGORIES as readonly string[]).includes(selectedCategory) ? (selectedCategory as Category) : 'All';
+  // Car types offered: those of the cars on show, in KeyGo's order
+  const CATEGORIES = useMemo(() => ['All', ...Array.from(new Set(vehicles.filter((v) => v.status !== 'Sold').map((v) => v.type)))], [vehicles]);
+  const category: Category = CATEGORIES.includes(selectedCategory) ? selectedCategory : 'All';
   const q = searchQuery.trim().toLowerCase();
   const filteredVehicles = customerFleet.filter((v) => {
     const matchesCategory = category === 'All' || v.type === category;
@@ -316,7 +318,7 @@ export default function HomeScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={!isPhone ? { flex: 1 } : undefined} contentContainerStyle={styles.catChips}>
             {CATEGORIES.map((c) => {
               const active = c === category;
-              const Icon = CATEGORY_ICONS[c];
+              const Icon = CATEGORY_ICONS[c] ?? Car;
               const count = categoryCount(c);
               return (
                 <TouchableOpacity

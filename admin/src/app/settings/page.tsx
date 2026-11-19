@@ -3,6 +3,7 @@
 import { SectionPage } from '../../components/portal/SectionPage';
 import CompanyProfileTab from '../../features/settings/CompanyProfileTab';
 import BranchesTab from '../../features/settings/BranchesTab';
+import MasterDataTab from '../../features/settings/MasterDataTab';
 import UsersRolesTab from '../../features/settings/UsersRolesTab';
 import PermissionsTab from '../../features/settings/PermissionsTab';
 import RentalPricingTab from '../../features/settings/RentalPricingTab';
@@ -19,6 +20,7 @@ export default function SettingsPage() {
       tabs={{
         'company-profile': CompanyProfileTab,
         branches: BranchesTab,
+        'master-data': MasterDataTab,
         'users-and-roles': UsersRolesTab,
         permissions: PermissionsTab,
         'rental-pricing': RentalPricingTab,

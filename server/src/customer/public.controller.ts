@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { BookingsService } from '../domain/bookings.service';
 import { DEFAULT_LOYALTY_TIERS, SETTING_LOYALTY_TIERS } from '../domain/defaults';
 import { StoreService } from '../domain/store.service';
+import { masterLists, SETTING_MASTER } from '../domain/catalog';
 
 /** Data anyone may see before signing in. */
 @ApiTags('public')
@@ -17,6 +18,13 @@ export class PublicController {
   @ApiOperation({ summary: 'The rentable fleet with prices' })
   vehicles() {
     return this.bookings.listVehicles({ status: { not: 'SOLD' } });
+  }
+
+  @Get('catalog')
+  @ApiOperation({ summary: 'Pricing rules and the car type, category and fuel lists' })
+  async catalog() {
+    const [pricing, lists] = await Promise.all([this.bookings.pricing(), this.store.setting(SETTING_MASTER, null)]);
+    return { pricing, lists: masterLists(lists) };
   }
 
   @Get('contact')

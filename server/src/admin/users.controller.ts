@@ -8,6 +8,7 @@ import { Can, CurrentUser, type AuthPayload } from '../auth/auth.decorators';
 import { newInvite, unusablePassword } from '../auth/invites';
 import { roleEnum, type StaffRoleLabel } from '../common/enums';
 import { StoreService } from '../domain/store.service';
+import { StaffSyncService } from '../domain/staff-sync.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { whatsappDigits, WhatsAppService } from '../whatsapp/whatsapp.service';
 
@@ -78,6 +79,7 @@ export class UsersController {
     private readonly prisma: PrismaService,
     private readonly store: StoreService,
     private readonly whatsapp: WhatsAppService,
+    private readonly staffSync: StaffSyncService,
     private readonly config: ConfigService,
   ) {}
 
@@ -112,6 +114,7 @@ export class UsersController {
         inviteExpiresAt: invite?.expiresAt,
       },
     });
+    await this.staffSync.sync(user);
     // The invitation token is returned only here; the server keeps just its hash
     const sent = invite && body.sendWhatsApp ? await this.sendInviteMessage(user, invite.token, body.inviteBaseUrl) : undefined;
     return { ...toApi(user), inviteToken: invite?.token, ...sent };
@@ -153,6 +156,7 @@ export class UsersController {
         inviteExpiresAt: body.password ? null : undefined,
       },
     });
+    await this.staffSync.sync(saved);
     return toApi(saved);
   }
 
@@ -184,6 +188,7 @@ export class UsersController {
     }
     // Their sign-in stops working at once: the guard finds no account for their token
     await this.prisma.user.delete({ where: { id } });
+    await this.staffSync.remove(id);
   }
 
   /** The address invitation links point at: the admin site the request came from, if it is one of ours. */

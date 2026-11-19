@@ -142,6 +142,11 @@ interface AppContextType {
   // Staff & Drivers
   drivers: Driver[];
   updateDriver: (id: string, patch: Partial<Driver>) => void;
+  addDriver: (driver: Driver) => void;
+  removeDriver: (id: string) => void;
+  addStaff: (staff: StaffPunch) => void;
+  updateStaff: (id: string, patch: Partial<StaffPunch>) => void;
+  removeStaff: (id: string) => void;
   /** Links a driver to a booking (updates both the booking and the driver's assignments). */
   assignDriverToBooking: (bookingId: string, driverId: string) => void;
   staffPunches: StaffPunch[];
@@ -556,6 +561,11 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   };
 
   // ---------- Staff & drivers ----------
+  const addDriver = (driver: Driver) => setDrivers((prev) => [driver, ...prev]);
+  const removeDriver = (id: string) => setDrivers((prev) => prev.filter((d) => d.id !== id));
+  const addStaff = (staff: StaffPunch) => setStaffPunches((prev) => [staff, ...prev]);
+  const updateStaff = (id: string, patch: Partial<StaffPunch>) => setStaffPunches((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const removeStaff = (id: string) => setStaffPunches((prev) => prev.filter((x) => x.id !== id));
   const updateDriver = (id: string, patch: Partial<Driver>) =>
     setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
@@ -682,6 +692,11 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         completeReminder,
         drivers,
         updateDriver,
+        addDriver,
+        removeDriver,
+        addStaff,
+        updateStaff,
+        removeStaff,
         assignDriverToBooking,
         staffPunches,
         toggleDutyPunch,

@@ -11,7 +11,7 @@ import type { Booking } from '../../types';
 import { ListPager, usePaged } from '../fleet/ListPager';
 import {
     BookingCard,
-    CATEGORY_FILTERS,
+    categoryFilters,
     CLASS_FILTERS,
     CLASS_TONE,
     makeStyles,
@@ -44,7 +44,7 @@ export function BookingListTab() {
   const [status, setStatus] = useState<StatusFilter>('All');
   const [term, setTerm] = useState<(typeof TERM_FILTERS)[number]>('All');
   const [classification, setClassification] = useState<(typeof CLASS_FILTERS)[number]>('All');
-  const [category, setCategory] = useState<(typeof CATEGORY_FILTERS)[number]>('All');
+  const [category, setCategory] = useState<string>('All');
   const [sort, setSort] = useState<SortKey>('Newest');
 
   const vehicleById = useMemo(() => new Map(vehicles.map((v) => [v.id, v])), [vehicles]);
@@ -304,7 +304,7 @@ export function BookingListTab() {
           </View>
           <View style={isDesktop ? { flex: 1 } : undefined}>
             <Text style={styles.filterLabel}>Vehicle category</Text>
-            <ChipGroup options={CATEGORY_FILTERS} value={category} onChange={setCategory} scroll />
+            <ChipGroup options={categoryFilters()} value={category} onChange={setCategory} scroll />
           </View>
         </View>
         <View>

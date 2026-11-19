@@ -37,13 +37,13 @@ export interface Quote {
  * Same rules as the apps: the weekly rate covers 7 days and the monthly rate 30, prorated beyond that;
  * the saving against the daily rate shows as the term discount.
  */
-export function computeQuote(rates: Rates, days: number, term: Term, manualDiscount = 0): Quote {
+export function computeQuote(rates: Rates, days: number, term: Term, manualDiscount = 0, taxRate = TAX_RATE): Quote {
   const d = Math.max(1, Math.round(days));
   const base = rates.daily * d;
   const termAmount = term === 'Weekly' ? Math.round((rates.weekly / 7) * d) : term === 'Monthly' ? Math.round((rates.monthly / 30) * d) : base;
   const termDiscount = Math.max(0, base - termAmount);
   const discount = Math.min(Math.max(0, manualDiscount), base - termDiscount);
   const subtotal = base - termDiscount - discount;
-  const tax = Math.round(subtotal * TAX_RATE);
+  const tax = Math.round(subtotal * taxRate);
   return { days: d, ratePerDay: rates.daily, base, termDiscount, manualDiscount: discount, subtotal, tax, total: subtotal + tax, deposit: rates.deposit };
 }

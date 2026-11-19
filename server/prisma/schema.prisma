@@ -28,14 +28,6 @@ enum UserRole {
   DRIVER
 }
 
-enum VehicleType {
-  HATCHBACK
-  SEDAN
-  SUV
-  MUV
-  ELECTRIC
-  LUXURY
-}
 
 enum VehicleStatus {
   AVAILABLE
@@ -197,7 +189,8 @@ model Vehicle {
   id                String        @id @default(cuid())
   name              String
   brand             String?
-  type              VehicleType
+  /// Car type from the editable list in Settings → Master data (e.g. "Hatchback", "SUV").
+  type              String
   color             String?
   seats             Int
   transmission      Transmission

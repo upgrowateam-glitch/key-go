@@ -138,6 +138,7 @@ export const SIDEBAR: SidebarGroup[] = [
     items: [
       item('WhatsApp & SMS', MessageCircle, '/notifications', { tab: 'whatsapp-and-sms-settings' }),
       item('Settings', Settings, '/settings'),
+      item('Master Data', Shapes, '/settings', { tab: 'master-data' }),
       item('Roles & Permissions', ShieldCheck, '/settings', { tab: 'users-and-roles' }),
     ],
   },

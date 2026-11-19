@@ -37,7 +37,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'reports', title: 'Reports & Analytics', href: '/reports', description: 'Filterable reports with charts and export', area: 'reports', tabs: t('Summary', 'Vehicle-wise', 'Customer-wise', 'Income & Expense', 'Maintenance', 'FASTag', 'Period Reports') },
   { id: 'notifications', title: 'Notifications', href: '/notifications', description: 'Reminders, templates, automation and delivery', area: 'notifications', tabs: t('Notification Center', 'Reminders', 'Templates', 'Automation', 'Delivery History', 'WhatsApp & SMS Settings') },
   { id: 'marketing', title: 'Marketing & Loyalty', href: '/marketing', description: 'Campaigns, segments, referrals and rewards', area: 'marketing', tabs: t('Campaigns', 'Customer Segments', 'Referral Codes', 'Customer Commission', 'Loyalty Points', 'Gifts & Rewards', 'Automation') },
-  { id: 'settings', title: 'Settings', href: '/settings', description: 'Company, roles, pricing, policies and theme', area: 'settings', needs: 'edit', tabs: t('Company Profile', 'Branches', 'Users & Roles', 'Permissions', 'Rental Pricing', 'Booking Policies', 'Payment Settings', 'Notification Settings', 'Terms & Conditions', 'Theme') },
+  { id: 'settings', title: 'Settings', href: '/settings', description: 'Company, roles, pricing, policies and theme', area: 'settings', needs: 'edit', tabs: t('Company Profile', 'Branches', 'Master Data', 'Users & Roles', 'Permissions', 'Rental Pricing', 'Booking Policies', 'Payment Settings', 'Notification Settings', 'Terms & Conditions', 'Theme') },
 ];
 
 export const findSection = (id: string) => NAV_SECTIONS.find((s) => s.id === id);

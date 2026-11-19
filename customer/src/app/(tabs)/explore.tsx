@@ -20,8 +20,7 @@ import {
 import { useResponsive } from '../../hooks/useResponsive';
 import { Vehicle } from '../../types';
 
-const CATEGORIES = ['All', 'Hatchback', 'Sedan', 'SUV', 'MUV'] as const;
-type Category = (typeof CATEGORIES)[number];
+type Category = string;
 const TRANSMISSIONS = ['All', 'Auto', 'Manual'] as const;
 type Transmission = (typeof TRANSMISSIONS)[number];
 const SORTS = ['recommended', 'low', 'high'] as const;
@@ -47,7 +46,9 @@ export default function FleetScreen() {
   const catalog = useMemo(() => vehicles.filter((v) => v.status !== 'Sold'), [vehicles]);
   const fuelOptions = useMemo(() => ['All', ...Array.from(new Set(catalog.map((v) => v.fuel)))], [catalog]);
 
-  const category: Category = (CATEGORIES as readonly string[]).includes(selectedCategory) ? (selectedCategory as Category) : 'All';
+  // Car types offered: those of the cars on show, in KeyGo's order
+  const CATEGORIES = useMemo(() => ['All', ...Array.from(new Set(vehicles.filter((v) => v.status !== 'Sold').map((v) => v.type)))], [vehicles]);
+  const category: Category = CATEGORIES.includes(selectedCategory) ? selectedCategory : 'All';
   const q = searchQuery.trim().toLowerCase();
 
   const filtered = useMemo(() => {

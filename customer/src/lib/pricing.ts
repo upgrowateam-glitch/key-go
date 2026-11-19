@@ -1,11 +1,23 @@
 import { RentalTerm, Vehicle } from '../types';
 import { ratesFor, TAX_RATE } from '../data/pricing';
 
-/** Rules that turn a vehicle's price list into a quote; the server applies the same rules to every booking. */
+/**
+ * Rules that turn a vehicle's price list into a quote, as set by KeyGo in the admin portal (Settings → Rental
+ * pricing). They arrive with the workspace (applyPricingRules); the server applies the same rules to every booking.
+ */
 export const PRICING_RULES = {
   taxRate: TAX_RATE,
+  termDiscount: { Daily: 0, Weekly: 0.1, Monthly: 0.25 } as Record<RentalTerm, number>,
   minDays: { Daily: 1, Weekly: 7, Monthly: 30 } as Record<RentalTerm, number>,
 };
+
+/** Uses KeyGo's current rules (sent by the server). Unknown or missing values keep the previous ones. */
+export function applyPricingRules(rules: { taxRate?: number; termDiscount?: Partial<Record<RentalTerm, number>>; minDays?: Partial<Record<RentalTerm, number>> } | undefined) {
+  if (!rules) return;
+  if (typeof rules.taxRate === 'number') PRICING_RULES.taxRate = rules.taxRate;
+  Object.assign(PRICING_RULES.termDiscount, rules.termDiscount ?? {});
+  Object.assign(PRICING_RULES.minDays, rules.minDays ?? {});
+}
 
 export interface Quote {
   days: number;

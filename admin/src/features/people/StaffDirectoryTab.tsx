@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { RotateCcw, UserCheck, Users } from 'lucide-react-native';
-import { Avatar, Button, Card, ChipGroup, DataTable, Divider, DocumentSlot, EmptyState, FormSheet, Grid, KeyValueGrid, Section, SegmentedControl, StatTile, StatusBadge, type Column } from '../../components/kit';
+import { KeyRound, Pencil, Plus, RotateCcw, Trash2, UserCheck, Users } from 'lucide-react-native';
+import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, Divider, DocumentSlot, EmptyState, FormSheet, Grid, KeyValueGrid, Section, SegmentedControl, StatTile, StatusBadge, type Column } from '../../components/kit';
+import { StaffForm } from './StaffForm';
 import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { formatDate, formatINR } from '../../lib/format';
 import { useResource } from '../../services/mockClient';
-import { fetchStaffProfiles, uploadStaffDocument, type StaffProfile } from '../../services/people';
-import { useThemedStyles, type ThemeColors } from '../../theme';
+import { fetchStaffProfiles, removeStaffProfile, uploadStaffDocument, type StaffProfile } from '../../services/people';
+import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { StaffPunch } from '../../types';
 import { CsvButton, FilterGroup, ListToolbar, Pager, SearchField, usePaged } from '../finance/tableTools';
 
@@ -22,8 +23,12 @@ interface Row {
 
 export default function StaffDirectoryTab() {
   const styles = useThemedStyles(makeStyles);
+  const colors = useThemeColors();
   const { cols, isPhone } = useResponsive();
-  const { staffPunches, today, showToast } = useApp();
+  const { staffPunches, today, showToast, removeStaff } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const res = useResource(fetchStaffProfiles);
   const [query, setQuery] = useState('');
   const [role, setRole] = useState('All');
@@ -66,9 +71,12 @@ export default function StaffDirectoryTab() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <Avatar name={r.staff.staffName} size={34} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.name} numberOfLines={1}>
-              {r.staff.staffName}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.name} numberOfLines={1}>
+                {r.staff.staffName}
+              </Text>
+              {r.staff.userId ? <KeyRound size={12} color={colors.muted} accessibilityLabel="Has a sign-in account" /> : null}
+            </View>
             <Text style={styles.sub}>{r.profile?.employeeCode ?? r.staff.id}</Text>
           </View>
         </View>
@@ -104,7 +112,10 @@ export default function StaffDirectoryTab() {
         <StatTile label="Documents to review" value={pendingDocs} hint="Pending or missing" tone={pendingDocs ? 'warning' : 'success'} />
       </Grid>
 
-      <Section title="Directory" subtitle={`${rows.length} people · select someone for full details`}>
+      <Section
+        title="Directory"
+        subtitle={`${rows.length} people · people with a sign-in (🔑) come from Settings → Users & Roles`}
+        action={<Button label="Add staff" size="sm" icon={(c) => <Plus size={14} color={c} />} onPress={() => setAdding(true)} />}>
         <ListToolbar search={<SearchField value={query} onChange={setQuery} placeholder="Name, code, phone or branch" />}>
           <FilterGroup label="Duty">
             <SegmentedControl options={STATUS} value={status} onChange={setStatus} />
@@ -133,8 +144,8 @@ export default function StaffDirectoryTab() {
             <EmptyState
               compact
               title={staffPunches.length ? 'No matching staff' : 'No staff yet'}
-              message={staffPunches.length ? 'Nothing matches these filters.' : 'Staff profiles will appear here.'}
-              action={filtered ? <Button label="Clear filters" variant="outline" size="sm" onPress={reset} /> : undefined}
+              message={staffPunches.length ? 'Nothing matches these filters.' : 'Add staff here, or add people in Settings → Users & Roles.'}
+              action={filtered ? <Button label="Clear filters" variant="outline" size="sm" onPress={reset} /> : <Button label="Add staff" size="sm" onPress={() => setAdding(true)} />}
             />
           }
         />
@@ -152,6 +163,14 @@ export default function StaffDirectoryTab() {
               </View>
               <StatusBadge status={selected.staff.status} />
             </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+              {selected.staff.userId ? <Badge label="Signs in to KeyGo" tone="info" icon={(c) => <KeyRound size={11} color={c} />} /> : null}
+              <Button label="Edit details" size="sm" variant="outline" icon={(c) => <Pencil size={13} color={c} />} onPress={() => setEditing(true)} />
+              {selected.staff.userId ? null : (
+                <Button label="Delete" size="sm" variant="danger" icon={(c) => <Trash2 size={13} color={c} />} onPress={() => setConfirmDelete(true)} />
+              )}
+            </View>
+            {selected.staff.userId ? <Text style={[styles.sub, { marginBottom: 10 }]}>To remove this person, delete their account in Settings → Users & Roles.</Text> : null}
             <KeyValueGrid
               cols={2}
               items={[
@@ -198,6 +217,26 @@ export default function StaffDirectoryTab() {
           </View>
         ) : null}
       </FormSheet>
+      {adding ? <StaffForm onClose={() => setAdding(false)} onSaved={res.reload} /> : null}
+      {editing && selected ? <StaffForm staff={selected.staff} profile={selected.profile} onClose={() => setEditing(false)} onSaved={res.reload} /> : null}
+      <ConfirmDialog
+        visible={confirmDelete && !!selected}
+        title={`Delete ${selected?.staff.staffName}?`}
+        message="Their staff record, attendance and HR details are removed. Salary already paid stays in Finance."
+        confirmLabel="Delete"
+        danger
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={async () => {
+          const target = selected;
+          setConfirmDelete(false);
+          if (!target) return;
+          removeStaff(target.staff.id);
+          await removeStaffProfile(target.staff.id).catch(() => undefined);
+          setSelectedId(null);
+          res.reload();
+          showToast(`${target.staff.staffName} deleted`);
+        }}
+      />
     </View>
   );
 }

@@ -21,6 +21,17 @@ const profilesDoc = serverDoc<StaffProfile[]>('people.profiles', []);
 
 export const fetchStaffProfiles = async () => profilesDoc.get();
 
+/** Adds or replaces the HR details of one staff member. */
+export const saveStaffProfile = async (profile: StaffProfile) => {
+  const rest = profilesDoc.get().filter((p) => p.staffId !== profile.staffId);
+  await profilesDoc.set([profile, ...rest]);
+  return profilesDoc.get();
+};
+
+export const removeStaffProfile = async (staffId: string) => {
+  await profilesDoc.set(profilesDoc.get().filter((p) => p.staffId !== staffId));
+};
+
 export const uploadStaffDocument = async (staffId: string, docId: string) => {
   await profilesDoc.set(
     profilesDoc.get().map((p) =>

@@ -3,7 +3,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { CurrentUser, CustomerOnly, type AuthPayload } from '../auth/auth.decorators';
 import { addDays, daysBetween, isIsoDate, todayIst } from '../common/dates';
-import { vehicleTypeEnum } from '../common/enums';
 import { rethrowDbError } from '../common/prisma-errors';
 import { BookingsService } from '../domain/bookings.service';
 import { DEFAULT_LOYALTY_TIERS, DEFAULT_PENALTIES, SETTING_LOYALTY_TIERS, SETTING_PENALTIES } from '../domain/defaults';
@@ -89,6 +88,8 @@ export class MeController {
       fastagLogs,
       notifications,
       loyaltyTiers,
+      // Rules and lists the app needs to price trips the same way as the server
+      pricing: await this.bookings.pricing(),
       standardFines: (penalties as Json[]).filter((p) => p.active !== false).map((p) => ({ id: p.id, label: p.label, amount: p.amount })),
     };
   }
@@ -117,11 +118,12 @@ export class MeController {
     if (body.pickupDate < todayIst()) throw new BadRequestException('The pickup date cannot be in the past.');
     const vehicle = await this.bookings.vehicleWithRates(body.vehicleId);
     if (vehicle.status === 'SOLD' || vehicle.status === 'MAINTENANCE') throw new BadRequestException('This car is not available for booking.');
-    const rates = ratesToApi(currentRate(vehicle.rates));
+    const rules = await this.bookings.pricing();
+    const rates = this.bookings.ratesFor(vehicle, rules);
     if (!rates) throw new BadRequestException('This car has no price yet.');
     const customer = await this.profile(me);
     const days = Math.max(1, daysBetween(body.pickupDate, body.returnDate) || 1);
-    const q = computeQuote(rates, days, body.term);
+    const q = computeQuote(rates, days, body.term, 0, rules.taxRate);
     const id = body.id && !(await this.prisma.booking.count({ where: { id: body.id } })) ? body.id : newBookingId();
     return this.bookings.saveBooking(id, {
       customerId: me.sub,
@@ -130,7 +132,7 @@ export class MeController {
       vehicleId: vehicle.id,
       vehicleName: vehicle.name,
       vehicleNumber: vehicle.registrationNo,
-      vehicleCategory: vehicleTypeEnum.fromDb(vehicle.type),
+      vehicleCategory: vehicle.type,
       pickupLocation: body.pickupLocation,
       pickupDate: body.pickupDate,
       pickupTime: body.pickupTime,
@@ -202,9 +204,10 @@ export class MeController {
     if (b.status !== 'CONFIRMED' && b.status !== 'ACTIVE') throw new BadRequestException('Only an upcoming or active rental can be extended.');
     const current = bookingToApi(b);
     const vehicle = await this.bookings.vehicleWithRates(b.vehicleId);
-    const rates = ratesToApi(currentRate(vehicle.rates))!;
+    const rules = await this.bookings.pricing();
+    const rates = this.bookings.ratesFor(vehicle, rules)!;
     const days = b.days + body.extraDays;
-    const q = computeQuote(rates, days, current.term as Term);
+    const q = computeQuote(rates, days, current.term as Term, 0, rules.taxRate);
     const saved = await this.bookings.patchBooking(id, {
       days,
       returnDate: addDays(current.returnDate as string, body.extraDays),

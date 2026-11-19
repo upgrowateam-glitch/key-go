@@ -1,7 +1,7 @@
 import { api } from '../lib/api';
 import type { StaffRole } from './auth';
 import { createStore } from '../features/notifications/listControls';
-import { PRICING_RULES } from '../lib/pricing';
+import { DEFAULT_PRICING, type PricingRules } from '../lib/catalog';
 import type { RentalTerm, VehicleType } from '../types';
 
 export interface CompanyProfile {
@@ -82,19 +82,10 @@ export const sendInvite = (id: string, sendWhatsApp = false) =>
 /** The link a person opens to accept their invitation. */
 export const inviteLink = (token: string) => `${typeof window === 'undefined' ? '' : window.location.origin}/invite?token=${encodeURIComponent(token)}`;
 
-export interface PricingSettings {
-  termDiscount: Record<RentalTerm, number>;
-  taxRate: number;
-  depositByCategory: Record<VehicleType, number>;
-  minDays: Record<RentalTerm, number>;
-}
+/** Settings → Rental pricing: used by the server, this portal and the customer app for every new price. */
+export type PricingSettings = PricingRules;
 
-export const pricingStore = createStore<PricingSettings>('settings.pricing', {
-  termDiscount: { ...PRICING_RULES.termDiscount },
-  taxRate: PRICING_RULES.taxRate,
-  depositByCategory: { ...PRICING_RULES.depositByCategory },
-  minDays: { ...PRICING_RULES.minDays },
-});
+export const pricingStore = createStore<PricingSettings>('settings.pricing', DEFAULT_PRICING);
 
 export interface BookingPolicies {
   minDriverAge: string;

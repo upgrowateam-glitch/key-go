@@ -8,7 +8,6 @@ import {
   Transmission,
   UserRole,
   VehicleStatus,
-  VehicleType,
   VerificationStatus,
 } from '@prisma/client';
 
@@ -33,15 +32,6 @@ function labelEnum<L extends string, D extends string>(name: string, labels: Rec
     },
   };
 }
-
-export const vehicleTypeEnum = labelEnum('vehicle type', {
-  Hatchback: VehicleType.HATCHBACK,
-  Sedan: VehicleType.SEDAN,
-  SUV: VehicleType.SUV,
-  MUV: VehicleType.MUV,
-  Electric: VehicleType.ELECTRIC,
-  Luxury: VehicleType.LUXURY,
-});
 
 export const vehicleStatusEnum = labelEnum('vehicle status', {
   Available: VehicleStatus.AVAILABLE,
