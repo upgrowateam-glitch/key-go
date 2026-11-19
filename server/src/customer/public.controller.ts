@@ -19,6 +19,14 @@ export class PublicController {
     return this.bookings.listVehicles({ status: { not: 'SOLD' } });
   }
 
+  @Get('contact')
+  @ApiOperation({ summary: 'How customers reach KeyGo (from the company profile in admin Settings)' })
+  async contact() {
+    const c = await this.store.setting<Record<string, unknown>>('settings.company', {});
+    const text = (k: string) => (typeof c[k] === 'string' ? (c[k] as string) : '');
+    return { name: text('name') || 'KeyGo', phone: text('phone'), email: text('email'), address: text('address'), supportHours: text('supportHours'), website: text('website') };
+  }
+
   @Get('loyalty-tiers')
   @ApiOperation({ summary: 'Loyalty programme tiers' })
   loyaltyTiers() {

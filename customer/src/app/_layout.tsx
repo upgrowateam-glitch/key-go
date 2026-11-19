@@ -29,6 +29,7 @@ function ThemedStack() {
         <Stack.Screen name="rental/[id]/agreement" />
         <Stack.Screen name="rental/[id]/pay" />
         <Stack.Screen name="rental/[id]/track" />
+        <Stack.Screen name="account/[section]" />
       </Stack>
       <KeyGoToast />
       <AppUpdatePrompt />

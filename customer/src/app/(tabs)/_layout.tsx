@@ -2,7 +2,7 @@ import React from 'react';
 import { ColorValue, Text, View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, CalendarCheck, Car, Home, User } from 'lucide-react-native';
+import { Bell, CalendarCheck, CarFront, Home, User } from 'lucide-react-native';
 import { boxShadow, useThemeColors } from '../../theme';
 import { KeyGoHeader } from '../../components/ui/KeyGoHeader';
 import { useApp } from '../../context/AppContext';
@@ -58,8 +58,8 @@ export default function TabLayout() {
         sceneStyle: { backgroundColor: colors.bg },
       }}>
       <Tabs.Screen name="index" options={{ title: 'Home', headerShown: false, tabBarIcon: ({ color, size }) => <Home size={size || 20} color={color} /> }} />
-      <Tabs.Screen name="explore" options={{ title: 'Fleet', tabBarIcon: ({ color, size }) => <Car size={size || 20} color={color} /> }} />
-      <Tabs.Screen name="bookings" options={{ title: 'My Trips', tabBarIcon: ({ color, size }) => <CalendarCheck size={size || 20} color={color} /> }} />
+      <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarIcon: ({ color, size }) => <CarFront size={size || 20} color={color} /> }} />
+      <Tabs.Screen name="bookings" options={{ title: 'Bookings', tabBarIcon: ({ color, size }) => <CalendarCheck size={size || 20} color={color} /> }} />
       <Tabs.Screen
         name="notifications"
         options={{
