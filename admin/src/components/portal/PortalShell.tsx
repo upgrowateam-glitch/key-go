@@ -3,7 +3,8 @@
 import React, { ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Bell, ChevronDown, ChevronRight, LogOut, Menu } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, LogOut, Menu, Settings } from 'lucide-react-native';
+import Svg, { Path } from 'react-native-svg';
 import { AppProvider, useApp } from '../../context/AppContext';
 import { ThemeProvider, useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -109,6 +110,10 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
         );
       })}
     </ScrollView>
+      <Svg width="100%" height={110} viewBox="0 0 288 110" preserveAspectRatio="none" style={styles.sidebarWave}>
+        <Path d="M0 46 C 60 20, 120 70, 190 44 C 236 28, 268 36, 288 30 L 288 110 L 0 110 Z" fill={colors.onNav} fillOpacity={0.04} />
+        <Path d="M0 70 C 80 44, 150 92, 230 64 C 256 56, 274 58, 288 56 L 288 110 L 0 110 Z" fill={colors.onNav} fillOpacity={0.05} />
+      </Svg>
       <View style={styles.sidebarFooter}>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.footerName} numberOfLines={1}>
@@ -149,9 +154,47 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
   const { isPhone } = useResponsive();
   const { notifications } = useApp();
   const unread = notifications.filter((n) => n.unread && !n.customerId).length;
+  const { refresh } = useStaffSession();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const canManage = session.role === 'Owner' || session.role === 'Admin';
 
   return (
     <View style={styles.header}>
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <Pressable accessibilityLabel="Close account menu" style={{ flex: 1 }} onPress={() => setMenuOpen(false)}>
+          <View style={styles.accountMenu}>
+            <Text style={styles.menuName}>{session.name}</Text>
+            <Text style={styles.menuMeta}>{session.email}</Text>
+            <Text style={styles.menuMeta}>{session.role}</Text>
+            <View style={styles.menuRule} />
+            {canManage ? (
+              <TouchableOpacity accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenuOpen(false); router.push('/settings?tab=users-and-roles'); }}>
+                <Settings size={16} color={colors.txt} />
+                <Text style={styles.menuItemText}>Users & settings</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenuOpen(false); setConfirmSignOut(true); }}>
+              <LogOut size={16} color={colors.danger} />
+              <Text style={[styles.menuItemText, { color: colors.danger }]}>Sign out</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+      <ConfirmDialog
+        visible={confirmSignOut}
+        title="Sign out of KeyGo Admin?"
+        message="You will need your email and password to sign in again."
+        confirmLabel="Sign out"
+        danger
+        onCancel={() => setConfirmSignOut(false)}
+        onConfirm={() => {
+          setConfirmSignOut(false);
+          signOut();
+          refresh();
+          router.replace('/login');
+        }}
+      />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {onMenu ? (
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation" style={styles.iconBtn} onPress={onMenu}>
@@ -161,13 +204,12 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
         <KeyGoLogo size={34} showText showTagline={!isPhone} />
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {!isPhone ? (
-          <View style={styles.rolePill}>
-            <Text style={styles.roleText}>
-              {session.name} · {session.role}
-            </Text>
-          </View>
-        ) : null}
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Account menu" style={styles.rolePill} onPress={() => setMenuOpen(true)}>
+          <Text style={styles.roleText} numberOfLines={1}>
+            {isPhone ? session.name.split(' ')[0] : `${session.name} - ${session.role}`}
+          </Text>
+          <ChevronDown size={15} color={colors.onNav} />
+        </TouchableOpacity>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Notifications, ${unread} unread`} style={styles.iconBtn} onPress={() => router.push('/notifications')}>
           <Bell size={18} color={colors.onNav} />
           {unread > 0 ? (
@@ -183,6 +225,7 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
 
 function PortalFrame({ session, children }: { session: StaffSession; children: ReactNode }) {
   const styles = useThemedStyles(makeStyles);
+  const colors = useThemeColors();
   const { isDesktop } = useResponsive();
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
@@ -194,7 +237,12 @@ function PortalFrame({ session, children }: { session: StaffSession; children: R
       <Navbar session={session} onMenu={isDesktop ? undefined : () => setDrawer(true)} />
       <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
         {isDesktop ? <Sidebar session={session} /> : null}
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={[styles.content, isDesktop ? styles.contentDesktop : styles.contentCompact]}>
+          {/* Soft green wave in the top-right corner of the content panel */}
+          <Svg width={560} height={190} viewBox="0 0 560 190" style={styles.contentWave}>
+            <Path d="M120 0 C 210 70, 330 40, 420 90 C 480 124, 520 130, 560 118 L 560 0 Z" fill={colors.secondary} fillOpacity={0.1} />
+            <Path d="M260 0 C 330 48, 420 30, 480 64 C 515 84, 540 86, 560 80 L 560 0 Z" fill={colors.secondary} fillOpacity={0.12} />
+          </Svg>
           {allowed ? (
             children
           ) : (
@@ -288,7 +336,29 @@ export default function PortalShell({ children }: { children: ReactNode }) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    frame: { height: '100%', backgroundColor: colors.bg },
+    frame: { height: '100%', backgroundColor: colors.nav },
+    content: { flex: 1, minWidth: 0, backgroundColor: colors.bg, overflow: 'hidden' },
+    contentDesktop: { borderTopLeftRadius: 28 },
+    contentCompact: { borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+    contentWave: { position: 'absolute', top: 0, right: 0, pointerEvents: 'none' },
+    sidebarWave: { position: 'absolute', left: 0, right: 0, bottom: 64, pointerEvents: 'none' },
+    accountMenu: {
+      position: 'absolute',
+      top: 62,
+      right: 16,
+      width: 250,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.line,
+      boxShadow: `0px 16px 36px ${withAlpha(colors.shadow, 0.22)}`,
+    } as never,
+    menuName: { color: colors.txt, fontSize: 15, fontWeight: '800' },
+    menuMeta: { color: colors.muted, fontSize: 12.5, marginTop: 2 },
+    menuRule: { height: 1, backgroundColor: colors.line, marginVertical: 10 },
+    menuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 4, borderRadius: 8 },
+    menuItemText: { color: colors.txt, fontSize: 14, fontWeight: '600' },
     header: {
       backgroundColor: colors.nav,
       paddingHorizontal: 16,
@@ -296,15 +366,13 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderBottomWidth: 1,
-      borderBottomColor: colors.navLine,
     },
-    iconBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.navLine, alignItems: 'center', justifyContent: 'center' },
-    rolePill: { height: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.navLine },
-    roleText: { color: colors.onNav, fontSize: 12, fontWeight: '700' },
+    iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.navLine, alignItems: 'center', justifyContent: 'center' },
+    rolePill: { height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: colors.navLine, maxWidth: 260 },
+    roleText: { color: colors.onNav, fontSize: 13.5, fontWeight: '700', flexShrink: 1 },
     notifDot: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.highlight, borderWidth: 2, borderColor: colors.nav, alignItems: 'center', justifyContent: 'center' },
     notifCount: { color: colors.onHighlight, fontSize: 9, fontWeight: '800' },
-    sidebar: { width: 288, flexGrow: 0, flexShrink: 0, backgroundColor: colors.nav, borderRightWidth: 1, borderRightColor: colors.navLine },
+    sidebar: { width: 288, flexGrow: 0, flexShrink: 0, backgroundColor: colors.nav },
     sidebarFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: colors.navLine },
     footerName: { color: colors.onNav, fontSize: 13.5, fontWeight: '700' },
     footerRole: { color: colors.navInactive, fontSize: 12, marginTop: 1 },

@@ -1,5 +1,5 @@
 import { useRouter } from '@/shims/expo-router';
-import { AlertTriangle, ArrowRight, CalendarCheck, Car, ClipboardList, Clock, CreditCard, Gauge, IndianRupee, Plus, TrendingDown, Wallet, Wrench } from 'lucide-react-native';
+import { AlertTriangle, ArrowRight, Bell, CalendarCheck, CalendarDays, Car, ClipboardList, Clock, CreditCard, Gauge, IndianRupee, Plus, TrendingDown, Wallet, Wrench } from 'lucide-react-native';
 import { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
@@ -12,11 +12,9 @@ import {
     Grid,
     HBarChart,
     ListRow,
-    PageHeader,
     Screen,
     Section,
     SplitView,
-    StatTile,
     StatusBadge,
 } from '../../components/kit';
 import { ResourceState } from '../../components/portal/ResourceState';
@@ -29,6 +27,7 @@ import { useResource } from '../../services/mockClient';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { Booking, MaintenanceReminder } from '../../types';
 import { sumCategories, totalExpense, totalIncome, TREND_MONTHS, useLedger } from '../finance/useLedger';
+import { DashPanel, DashSection, DashTile, RingTile } from './dashKit';
 
 const UTILIZATION_DAYS = 30;
 const RENEWAL_TYPES: MaintenanceReminder['type'][] = ['Insurance renewal', 'Emission renewal'];
@@ -127,19 +126,24 @@ export default function OpsDashboardScreen() {
   const openBooking = (id: string) => router.push(`/bookings/${encodeURIComponent(id)}`);
 
   const header = (
-    <PageHeader
-      eyebrow="Admin & staff"
-      title="Operations dashboard"
-      subtitle={`Today · ${formatDate(today)}`}
-      actions={
-        <>
+    <View style={styles.headerRow}>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={styles.eyebrow}>ADMIN & STAFF</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          Operations dashboard
+        </Text>
+        <View style={styles.dateRow}>
+          <CalendarDays size={15} color={colors.muted} />
+          <Text style={styles.dateText}>Today · {formatDate(today)}</Text>
+        </View>
+      </View>
+      <View style={styles.headerActions}>
           <Button label="New booking" icon={(c) => <Plus size={16} color={c} />} onPress={() => open('/bookings?tab=create-booking')} />
           <Button label="Add vehicle" variant="outline" icon={(c) => <Car size={16} color={c} />} onPress={() => open('/fleet')} />
           <Button label="Staff punch" variant="outline" icon={(c) => <Clock size={16} color={c} />} onPress={() => open('/people?tab=attendance')} />
           <Button label="Inspect car" variant="outline" icon={(c) => <ClipboardList size={16} color={c} />} onPress={() => open('/inspections')} />
-        </>
-      }
-    />
+      </View>
+    </View>
   );
 
   if (error || pay.error || extrasLoading || (pay.loading && !pay.data)) {
@@ -162,30 +166,39 @@ export default function OpsDashboardScreen() {
     <Screen>
       {header}
 
-      <Section title={`Fleet · ${vehicles.length} vehicles`} subtitle="Current status of every vehicle" style={{ marginTop: 8 }}>
+      <DashSection title={`Fleet · ${vehicles.length} vehicles`} subtitle="Current status of every vehicle" icon={(c) => <Car size={20} color={c} />} style={{ marginTop: 18 }}>
         <Grid cols={cols(2, 3, 5)}>
-          <StatTile label="Available" value={count('Available')} tone="success" icon={(c) => <Car size={16} color={c} />} onPress={() => open('/fleet')} />
-          <StatTile label="Reserved" value={count('Reserved')} tone="info" icon={(c) => <CalendarCheck size={16} color={c} />} onPress={() => open('/fleet')} />
-          <StatTile label="Rented" value={count('On Rent')} hint={`${overdue.length} overdue`} tone={overdue.length ? 'danger' : 'violet'} icon={(c) => <Gauge size={16} color={c} />} onPress={() => open('/tracking')} />
-          <StatTile label="Maintenance" value={count('Maintenance')} tone="warning" icon={(c) => <Wrench size={16} color={c} />} onPress={() => open('/maintenance')} />
-          <StatTile label="Sold" value={count('Sold')} tone="neutral" icon={(c) => <IndianRupee size={16} color={c} />} onPress={() => open('/fleet')} />
+          <DashTile accentLabel label="Available" value={count('Available')} tone="success" icon={(c) => <Car size={19} color={c} />} onPress={() => open('/fleet?status=Available')} />
+          <DashTile label="Reserved" value={count('Reserved')} tone="info" icon={(c) => <CalendarCheck size={19} color={c} />} onPress={() => open('/fleet?status=Reserved')} />
+          <DashTile label="Rented" value={count('On Rent')} hint={`${overdue.length} overdue`} tone={overdue.length ? 'danger' : 'violet'} icon={(c) => <Gauge size={19} color={c} />} onPress={() => open('/tracking')} />
+          <DashTile label="Maintenance" value={count('Maintenance')} tone="warning" icon={(c) => <Wrench size={19} color={c} />} onPress={() => open('/maintenance')} />
+          <DashTile label="Sold" value={count('Sold')} tone="neutral" icon={(c) => <IndianRupee size={19} color={c} />} onPress={() => open('/fleet?status=Sold')} />
         </Grid>
-      </Section>
+      </DashSection>
 
-      <Grid cols={cols(2, 3, 5)} style={{ marginTop: 12 }}>
-        <StatTile emphasis label="Fleet utilization" value={`${utilization}%`} hint={`${count('On Rent')} on rent · ${count('Reserved')} reserved`} icon={(c) => <Gauge size={16} color={c} />} />
-        <StatTile label="Rental income" value={formatINRCompact(income)} hint="This month, rentals + fines" tone="primary" icon={(c) => <IndianRupee size={16} color={c} />} onPress={() => open('/finance')} />
-        <StatTile label="Expenses" value={formatINRCompact(expense)} hint="This month" tone="warm" icon={(c) => <TrendingDown size={16} color={c} />} onPress={() => open('/finance?tab=expenses')} />
-        <StatTile label="Outstanding payments" value={formatINRCompact(outstanding)} hint={`${unpaidCount} bookings with a balance`} tone={outstanding ? 'warning' : 'success'} icon={(c) => <Wallet size={16} color={c} />} onPress={() => open('/finance?tab=payments-and-refunds')} />
-        <StatTile label="Needs attention" value={queue.length + overdue.length + expiring.length} hint="Tasks, overdue & expiries" tone="warning" icon={(c) => <AlertTriangle size={16} color={c} />} />
+      <Grid cols={cols(2, 3, 5)} style={{ marginTop: 14 }}>
+        <RingTile label="Fleet utilization" percent={utilization} hint={`${count('On Rent')} on rent · ${count('Reserved')} reserved`} />
+        <DashTile label="Rental income" value={formatINRCompact(income)} hint="This month, rentals + fines" tone="success" icon={(c) => <IndianRupee size={19} color={c} />} onPress={() => open('/finance')} />
+        <DashTile label="Expenses" value={formatINRCompact(expense)} hint="This month" tone="warm" icon={(c) => <TrendingDown size={19} color={c} />} onPress={() => open('/finance?tab=expenses')} />
+        <DashTile label="Outstanding payments" value={formatINRCompact(outstanding)} hint={`${unpaidCount} bookings with a balance`} tone={outstanding ? 'warning' : 'success'} icon={(c) => <Wallet size={19} color={c} />} onPress={() => open('/finance?tab=payments-and-refunds')} />
+        <DashTile label="Needs attention" value={queue.length + overdue.length + expiring.length} hint="Tasks, overdue & expiries" tone="warning" icon={(c) => <AlertTriangle size={19} color={c} />} />
       </Grid>
 
       <SplitView
         sideWidth={400}
         main={
           <View>
-            <Section title="Rental workflow queue" subtitle="Bookings waiting on the next step" action={<Button label="All bookings" size="sm" variant="ghost" onPress={() => open('/bookings')} />}>
-              <Card padded={false}>
+            <DashSection
+              title="Rental workflow queue"
+              subtitle="Bookings waiting on the next step"
+              icon={(c) => <CalendarCheck size={20} color={c} />}
+              action={
+                <TouchableOpacity accessibilityRole="link" style={styles.linkRow} onPress={() => open('/bookings')}>
+                  <Text style={styles.linkText}>All bookings</Text>
+                  <ArrowRight size={15} color={colors.primaryText} />
+                </TouchableOpacity>
+              }>
+              <DashPanel>
                 {queue.length === 0 ? (
                   <EmptyState title="All caught up" message="No bookings are waiting on staff right now." compact />
                 ) : (
@@ -207,8 +220,8 @@ export default function OpsDashboardScreen() {
                     </TouchableOpacity>
                   ))
                 )}
-              </Card>
-            </Section>
+              </DashPanel>
+            </DashSection>
 
             <Grid cols={cols(1, 2, 2)} gap={16}>
               <Section title="Today's bookings" subtitle={`Pickups, returns and new bookings · ${formatDate(today, false)}`}>
@@ -289,14 +302,21 @@ export default function OpsDashboardScreen() {
         }
         side={
           <View>
-            <Section title="Alerts" subtitle="Overdue returns, expiries & balances">
-              <Card padded={false} style={{ paddingHorizontal: 16 }}>
+            <DashSection title="Alerts" subtitle="Overdue returns, expiries & balances" icon={(c) => <Bell size={20} color={c} />}>
+              <DashPanel>
+                <View style={{ paddingHorizontal: 16 }}>
                 {overdue.length + expiring.length + lowTag.length + dueService.length === 0 ? <EmptyState compact title="No alerts" message="Nothing needs attention right now." /> : null}
                 {overdue.map((b) => (
-                  <ListRow key={b.id} title={`${b.vehicleName} return overdue`} subtitle={`${b.customerName} · due ${formatDate(b.returnDate, false)} ${b.returnTime}`} right={<Badge label="Overdue" tone="danger" />} onPress={() => openBooking(b.id)} />
+                  <ListRow key={b.id} left={<View style={[styles.dot, { backgroundColor: colors.danger }]} />} title={`${b.vehicleName} return overdue`} subtitle={`${b.customerName} · due ${formatDate(b.returnDate, false)} ${b.returnTime}`} right={<Badge label="Overdue" tone="danger" />} onPress={() => openBooking(b.id)} />
                 ))}
                 {expiring.map((e) => (
-                  <ListRow key={e.id} title={e.text} right={<Badge label={e.tone === 'danger' ? 'Expired' : 'Due soon'} tone={e.tone} />} onPress={() => router.push(`/fleet/${e.vehicleId}`)} />
+                  <ListRow
+                    key={e.id}
+                    title={e.text}
+                    left={<View style={[styles.dot, { backgroundColor: e.tone === 'danger' ? colors.danger : colors.warning }]} />}
+                    right={<Badge label={e.tone === 'danger' ? 'Expired' : 'Due soon'} tone={e.tone} />}
+                    onPress={() => router.push(`/fleet/${e.vehicleId}?tab=documents`)}
+                  />
                 ))}
                 {lowTag.map((v) => (
                   <ListRow key={`${v.id}-tag`} title={`${v.name}: FASTag ${formatINR(v.fastagBalance)}`} subtitle="Balance below ₹500" left={<CreditCard size={16} color={colors.warmText} />} onPress={() => open('/fastag')} />
@@ -310,8 +330,9 @@ export default function OpsDashboardScreen() {
                     style={{ borderBottomWidth: 0 }}
                   />
                 ) : null}
-              </Card>
-            </Section>
+                </View>
+              </DashPanel>
+            </DashSection>
             <Section title="Fleet status">
               <Card>
                 <DonutChart
@@ -365,6 +386,15 @@ function ReminderRow({ reminder: r, vehicle, onPress }: { reminder: MaintenanceR
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    headerRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 },
+    eyebrow: { color: colors.primaryText, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
+    title: { color: colors.txt, fontSize: 32, fontWeight: '800', letterSpacing: -0.6, marginTop: 4 },
+    dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    dateText: { color: colors.muted, fontSize: 14 },
+    headerActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginTop: 8 },
+    linkRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 4 },
+    linkText: { color: colors.primaryText, fontSize: 14, fontWeight: '700' },
+    dot: { width: 8, height: 8, borderRadius: 4 },
     queueRow: {
       flexDirection: 'row',
       alignItems: 'center',

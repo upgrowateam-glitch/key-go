@@ -1,5 +1,5 @@
 import { useRouter } from '@/shims/expo-router';
-import { Car, CarFront, CircleCheck, KeyRound, Plus, Search, Shapes, Tag, Wrench } from 'lucide-react-native';
+import { Car, CarFront, CircleCheck, KeyRound, Plus, Shapes, Tag, Wrench } from 'lucide-react-native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { StyleSheet, Text, View } from 'react-native';
@@ -7,11 +7,9 @@ import {
     Badge,
     Button,
     Card,
-    ChipGroup,
     Column,
     DataTable,
     EmptyState,
-    Field,
     Grid,
     PageHeader,
     ProgressBar,
@@ -27,11 +25,12 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { formatDate, formatINR, formatKm } from '../../lib/format';
 import { categoryOf, loadFleetExtras, readFleetExtras, VEHICLE_CATEGORIES } from '../../services/fleet';
 import { useResource } from '../../services/mockClient';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
+import { useThemedStyles, type ThemeColors } from '../../theme';
 import { Vehicle, VehicleStatus } from '../../types';
 import { ListPager, usePaged } from './ListPager';
 import { expiryFlag, VehicleThumb } from './shared';
 import { VehicleForm } from './VehicleForm';
+import { FilterBar, FilterOptions, type ActiveFilter } from './FilterBar';
 
 const STATUS_FILTERS = ['All', 'Available', 'Reserved', 'On Rent', 'Maintenance', 'Sold'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
@@ -50,7 +49,6 @@ const SORTERS: Record<SortKey, (a: Vehicle, b: Vehicle) => number> = {
 };
 
 export default function FleetScreen() {
-  const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { isPhone, cols } = useResponsive();
@@ -93,7 +91,11 @@ export default function FleetScreen() {
   }, [vehicles, query, status, type, category, sort, extras.data]);
   const paged = usePaged(filtered);
 
-  const filtersActive = query.trim() !== '' || status !== 'All' || type !== 'All types' || category !== 'All categories';
+  const activeFilters: ActiveFilter[] = [
+    ...(status !== 'All' ? [{ key: 'status', label: `Status: ${status}`, onClear: () => setStatus('All') }] : []),
+    ...(type !== 'All types' ? [{ key: 'type', label: `Type: ${type}`, onClear: () => setType('All types') }] : []),
+    ...(category !== 'All categories' ? [{ key: 'category', label: `Category: ${category}`, onClear: () => setCategory('All categories') }] : []),
+  ];
   const resetFilters = () => {
     setQuery('');
     setStatus('All');
@@ -249,30 +251,28 @@ export default function FleetScreen() {
         </View>
       ) : null}
 
-      <Card style={{ marginTop: 4 }}>
-        <Field
-          label="Search"
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Name, registration number or vehicle ID"
-          left={<Search size={16} color={colors.muted} />}
-          style={{ marginBottom: 12 }}
+      <View style={{ marginTop: 4, zIndex: 20 }}>
+        <FilterBar
+          query={query}
+          onQuery={setQuery}
+          placeholder="Search vehicles..."
+          active={activeFilters}
+          onClearAll={resetFilters}
+          sortOptions={SORT_KEYS}
+          sort={sort}
+          onSort={setSort}
+          panel={
+            <>
+              <FilterOptions label="Status" options={STATUS_FILTERS} value={status} onChange={setStatus} />
+              <FilterOptions label="Type" options={TYPE_FILTERS} value={type} onChange={setType} />
+              <FilterOptions label="Category" options={CATEGORY_FILTERS} value={category} onChange={setCategory} />
+            </>
+          }
         />
-        <Text style={styles.filterLabel}>Status</Text>
-        <ChipGroup options={STATUS_FILTERS} value={status} onChange={setStatus} scroll={isPhone} />
-        <Text style={[styles.filterLabel, { marginTop: 12 }]}>Type</Text>
-        <ChipGroup options={TYPE_FILTERS} value={type} onChange={setType} scroll={isPhone} />
-        <Text style={[styles.filterLabel, { marginTop: 12 }]}>Category</Text>
-        <ChipGroup options={CATEGORY_FILTERS} value={category} onChange={setCategory} scroll={isPhone} />
-        <Text style={[styles.filterLabel, { marginTop: 12 }]}>Sort by</Text>
-        <ChipGroup options={SORT_KEYS} value={sort} onChange={setSort} scroll={isPhone} />
-        <View style={styles.resultRow}>
-          <Text style={styles.resultText}>
-            Showing {filtered.length} of {vehicles.length} vehicles
-          </Text>
-          {filtersActive ? <Button label="Reset filters" variant="ghost" size="sm" onPress={resetFilters} /> : null}
-        </View>
-      </Card>
+        <Text style={[styles.resultText, { marginTop: 10 }]}>
+          Showing {filtered.length} of {vehicles.length} vehicles
+        </Text>
+      </View>
 
       <View style={{ marginTop: 16 }}>
         {isPhone ? (
@@ -341,7 +341,6 @@ const makeStyles = (colors: ThemeColors) =>
     cellSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
     cellText: { color: colors.txt, fontSize: 13 },
     filterLabel: { color: colors.muted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
-    resultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, minHeight: 32 },
     resultText: { color: colors.muted, fontSize: 12 },
     cardMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.line },
     metaText: { color: colors.txt, fontSize: 12, fontWeight: '600' },
