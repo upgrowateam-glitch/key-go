@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Car, Crown, KeyRound, Link2, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
+import { Car, Crown, KeyRound, Link2, ShieldCheck, Trash2, UserCog, UserPlus, Users } from 'lucide-react-native';
 import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, EmptyState, Field, FormRow, FormSheet, Grid, StatTile, ToggleRow, type Column, type Tone } from '../../components/kit';
 import { fetchWhatsApp } from '../../services/whatsapp';
 import { FilterBar, FilterOptions, type ActiveFilter } from '../fleet/FilterBar';
@@ -8,7 +8,7 @@ import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useThemeColors, useThemedStyles } from '../../theme';
-import { branchesStore, createUser, fetchUsers, inviteLink, sendInvite, updateUser, type PortalUser } from '../../services/settings';
+import { branchesStore, createUser, deleteUser, fetchUsers, inviteLink, sendInvite, updateUser, type PortalUser } from '../../services/settings';
 import { InviteLinkSheet } from './InviteLinkSheet';
 import { readSession, type StaffRole } from '../../services/auth';
 import { useResource } from '../../services/mockClient';
@@ -62,6 +62,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   const [editingRole, setEditingRole] = useState<PortalUser | null>(null);
   const [resetting, setResetting] = useState<PortalUser | null>(null);
   const [toggling, setToggling] = useState<PortalUser | null>(null);
+  const [deleting, setDeleting] = useState<PortalUser | null>(null);
   const me = useMemo(() => readSession(), []);
 
   const filtered = useMemo(
@@ -114,6 +115,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
         <Button label="Reset password" size="sm" variant="outline" disabled={ownerOnly(u)} icon={(c) => <KeyRound size={13} color={c} />} onPress={() => setResetting(u)} />
       )}
       <Button label={u.active ? 'Disable' : 'Enable'} size="sm" variant={u.active ? 'danger' : 'secondary'} disabled={isLastOwner(u) || isSelf(u) || ownerOnly(u)} onPress={() => setToggling(u)} />
+      <Button label="Delete" size="sm" variant="danger" disabled={isLastOwner(u) || isSelf(u) || ownerOnly(u)} icon={(c) => <Trash2 size={13} color={c} />} onPress={() => setDeleting(u)} />
     </View>
   );
   const roleCell = (u: PortalUser) => (
@@ -162,7 +164,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
         </View>
       ),
     },
-    { key: 'actions', label: 'Actions', flex: 2.4, minWidth: 380, align: 'right', render: actions },
+    { key: 'actions', label: 'Actions', flex: 3, minWidth: 470, align: 'right', render: actions },
   ];
 
   const activeFilters: ActiveFilter[] = [
@@ -318,6 +320,30 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
           if (!target) return;
           const saved = await run(() => updateUser(target.id, { active: !target.active }), (u) => `${u.name} ${u.active ? 'enabled' : 'disabled'}`);
           if (saved) replace(saved);
+        }}
+      />
+      <ConfirmDialog
+        visible={!!deleting}
+        title={deleting?.invitePending ? `Cancel the invitation for ${deleting.name}?` : `Delete ${deleting?.name}?`}
+        message={
+          deleting?.invitePending
+            ? 'Their invitation link stops working and they are removed from the list. You can invite them again later.'
+            : 'Their account is removed and they are signed out at once. This cannot be undone. To stop someone for a while, use Disable instead.'
+        }
+        confirmLabel={deleting?.invitePending ? 'Cancel invitation' : 'Delete'}
+        danger
+        onCancel={() => setDeleting(null)}
+        onConfirm={async () => {
+          const target = deleting;
+          setDeleting(null);
+          if (!target) return;
+          try {
+            await deleteUser(target.id);
+            setRows(rows.filter((u) => u.id !== target.id));
+            showToast(target.invitePending ? `Invitation for ${target.name} cancelled` : `${target.name} was deleted`);
+          } catch (e) {
+            showToast((e as Error).message);
+          }
         }}
       />
     </View>

@@ -2,7 +2,8 @@ import React from 'react';
 import { Text, StyleSheet, Animated, View } from 'react-native';
 import { CheckCircle2 } from 'lucide-react-native';
 import { useApp } from '../../context/AppContext';
-import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
+import { useResponsive } from '../../hooks/useResponsive';
+import { useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '../../theme';
 
 export const KeyGoToast: React.FC = () => {
   const { toast } = useApp();
@@ -13,9 +14,11 @@ export const KeyGoToast: React.FC = () => {
 export function KeyGoToastView({ message }: { message: string; onHide?: () => void }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const { isPhone } = useResponsive();
   if (!message) return null;
   return (
-    <Animated.View style={styles.toastContainer}>
+    // A small card in the bottom-right corner; across the bottom on phones
+    <Animated.View accessibilityRole="alert" style={[styles.toastContainer, isPhone ? styles.phone : styles.corner]}>
       <View style={styles.iconWrap}>
         <CheckCircle2 size={16} color={colors.accentText} />
       </View>
@@ -28,9 +31,6 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   toastContainer: {
     position: 'absolute',
-    bottom: 88,
-    left: 16,
-    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -38,15 +38,13 @@ const makeStyles = (colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: colors.lineStrong,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 12,
+    boxShadow: `0px 12px 28px ${withAlpha(colors.shadow, 0.18)}`,
     zIndex: 999,
-  },
+  } as never,
+  corner: { right: 24, bottom: 24, maxWidth: 380 },
+  phone: { left: 16, right: 16, bottom: 24 },
   iconWrap: {
     width: 28,
     height: 28,
@@ -56,7 +54,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   toastText: {
-    flex: 1,
+    flexShrink: 1,
     color: colors.txt,
     fontSize: 13,
     fontWeight: '600',

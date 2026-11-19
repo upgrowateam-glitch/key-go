@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { User } from '@prisma/client';
@@ -169,6 +169,21 @@ export class UsersController {
     if (body.sendWhatsApp && !saved.phone) throw new BadRequestException('Add a WhatsApp number for this person first.');
     const sent = body.sendWhatsApp ? await this.sendInviteMessage(saved, invite.token, body.inviteBaseUrl) : undefined;
     return { ...toApi(saved), inviteToken: invite.token, ...sent };
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Delete a staff account (or cancel an invitation that was not accepted yet)' })
+  async remove(@Param('id') id: string, @CurrentUser() me: AuthPayload) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Staff account not found.');
+    if (id === me.sub) throw new BadRequestException('You cannot delete your own account.');
+    if (user.role === 'OWNER' && me.role !== 'Owner') throw new ForbiddenException('Only an Owner can delete an Owner account.');
+    if (user.role === 'OWNER' && user.active && (await this.prisma.user.count({ where: { role: 'OWNER', active: true } })) <= 1) {
+      throw new BadRequestException('KeyGo needs at least one active Owner account.');
+    }
+    // Their sign-in stops working at once: the guard finds no account for their token
+    await this.prisma.user.delete({ where: { id } });
   }
 
   /** The address invitation links point at: the admin site the request came from, if it is one of ours. */

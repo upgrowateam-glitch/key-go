@@ -69,6 +69,9 @@ export const fetchUsers = () => api<PortalUser[]>('/admin/users');
 /** Without a password the server creates an invitation link instead (returned once as inviteToken). */
 export const createUser = (input: { name: string; email?: string; phone?: string; role: StaffRole; branch: string; password?: string; driverId?: string; sendWhatsApp?: boolean }) =>
   api<PortalUser>('/admin/users', { method: 'POST', body: { ...input, inviteBaseUrl: window.location.origin } });
+/** Deletes a staff account, or cancels an invitation that was not accepted yet. */
+export const deleteUser = (id: string) => api<void>(`/admin/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active' | 'phone'>> & { password?: string; driverId?: string }) =>
   api<PortalUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
 
