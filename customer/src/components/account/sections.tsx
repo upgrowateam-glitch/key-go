@@ -29,7 +29,7 @@ import { useApp } from '../../context/AppContext';
 import { useContact, phoneDigits } from '../../hooks/useContact';
 import { formatDate, formatINR, formatKm } from '../../lib/format';
 import { ratesFor } from '../../data/pricing';
-import { signOut } from '../../services/auth';
+import { changePassword, signOut, signOutEverywhere } from '../../services/auth';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { Booking, Customer, VerificationStatus } from '../../types';
 import { Badge, Button, Card, ConfirmDialog, Divider, EmptyState, Field, FormRow, FormSheet, KeyValueGrid, ProgressBar, StatusBadge, type Tone } from '../kit';
@@ -905,7 +905,36 @@ function PrivacyBody() {
   const { me } = useMe();
   const router = useRouter();
   const styles = useThemedStyles(makeStyles);
+  const { showToast } = useMe();
   const [confirm, setConfirm] = useState(false);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [again, setAgain] = useState('');
+  const [tried, setTried] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const nextError = next.length < 8 ? 'Use at least 8 characters' : next === current ? 'Choose a different password' : undefined;
+  const againError = again !== next ? 'The two new passwords do not match' : undefined;
+  const leave = () => router.replace('/login' as never);
+
+  const savePassword = async () => {
+    setTried(true);
+    if (!current || nextError || againError) return;
+    setSaving(true);
+    try {
+      await changePassword(current, next);
+      setCurrent('');
+      setNext('');
+      setAgain('');
+      setTried(false);
+      showToast('Password changed. Other devices were signed out.');
+    } catch (e) {
+      showToast((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <View style={{ gap: 12 }}>
       <Card>
@@ -913,15 +942,24 @@ function PrivacyBody() {
         <Text style={styles.itemSub}>
           {me.email || me.phone} · customer code {me.customerCode}
         </Text>
-        <View style={{ marginTop: 12 }}>
+        <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           <Button label="Sign out of this device" variant="danger" onPress={() => setConfirm(true)} />
+          <Button label="Sign out of all devices" variant="outline" onPress={() => setConfirmAll(true)} />
         </View>
+      </Card>
+      <Card>
+        <Text style={[styles.itemTitle, { marginBottom: 10 }]}>Change password</Text>
+        <Field label="Current password" secureTextEntry value={current} onChangeText={setCurrent} error={tried && !current ? 'Enter your current password' : undefined} />
+        <Field label="New password" secureTextEntry value={next} onChangeText={setNext} error={tried ? nextError : undefined} hint="At least 8 characters." />
+        <Field label="New password again" secureTextEntry value={again} onChangeText={setAgain} error={tried ? againError : undefined} />
+        <Button label={saving ? 'Saving…' : 'Change password'} disabled={saving} onPress={savePassword} />
+        <Text style={styles.note}>Other phones or browsers signed in to your account will be signed out.</Text>
       </Card>
       <Card>
         <Text style={styles.itemTitle}>How KeyGo uses your data</Text>
         {[
           'Your ID and licence are used only to verify you before a rental.',
-          'Your Aadhaar number is stored encrypted; staff see only the last 4 digits.',
+          'Your Aadhaar number is stored encrypted; most staff see only the last 4 digits.',
           'Vehicle GPS location is used for safety and recovery during your rental.',
           'To change or remove your data, contact KeyGo support.',
         ].map((t) => (
@@ -943,7 +981,24 @@ function PrivacyBody() {
         onConfirm={() => {
           setConfirm(false);
           signOut();
-          router.replace('/login' as never);
+          leave();
+        }}
+      />
+      <ConfirmDialog
+        visible={confirmAll}
+        title="Sign out of all devices?"
+        message="Every phone and browser signed in to your KeyGo account, including this one, will be signed out."
+        confirmLabel="Sign out everywhere"
+        danger
+        onCancel={() => setConfirmAll(false)}
+        onConfirm={async () => {
+          setConfirmAll(false);
+          try {
+            await signOutEverywhere();
+            leave();
+          } catch (e) {
+            showToast((e as Error).message);
+          }
         }}
       />
     </View>

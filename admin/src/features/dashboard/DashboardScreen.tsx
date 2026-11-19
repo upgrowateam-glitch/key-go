@@ -18,6 +18,8 @@ import {
     StatusBadge,
 } from '../../components/kit';
 import { ResourceState } from '../../components/portal/ResourceState';
+import { useStaffSession } from '../../components/portal/PortalShell';
+import { canAccess } from '../../services/auth';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { addDays, daysBetween, formatDate, formatINR, formatINRCompact } from '../../lib/format';
@@ -46,6 +48,9 @@ export default function OpsDashboardScreen() {
   const { cols, isPhone } = useResponsive();
   const { vehicles, bookings, maintenanceReminders, today } = useApp();
   const { entries, extrasLoading, error, reload } = useLedger();
+  // Money figures are shown only to roles that can open Finance
+  const { session } = useStaffSession();
+  const money = canAccess(session, 'finance');
   const pay = useResource(fetchPayments);
 
   const fleet = vehicles.filter((v) => v.status !== 'Sold');
@@ -178,9 +183,9 @@ export default function OpsDashboardScreen() {
 
       <Grid cols={cols(2, 3, 5)} style={{ marginTop: 14 }}>
         <RingTile label="Fleet utilization" percent={utilization} hint={`${count('On Rent')} on rent · ${count('Reserved')} reserved`} />
-        <DashTile label="Rental income" value={formatINRCompact(income)} hint="This month, rentals + fines" tone="success" icon={(c) => <IndianRupee size={19} color={c} />} onPress={() => open('/finance')} />
-        <DashTile label="Expenses" value={formatINRCompact(expense)} hint="This month" tone="warm" icon={(c) => <TrendingDown size={19} color={c} />} onPress={() => open('/finance?tab=expenses')} />
-        <DashTile label="Outstanding payments" value={formatINRCompact(outstanding)} hint={`${unpaidCount} bookings with a balance`} tone={outstanding ? 'warning' : 'success'} icon={(c) => <Wallet size={19} color={c} />} onPress={() => open('/finance?tab=payments-and-refunds')} />
+        {money ? <DashTile label="Rental income" value={formatINRCompact(income)} hint="This month, rentals + fines" tone="success" icon={(c) => <IndianRupee size={19} color={c} />} onPress={() => open('/finance')} /> : null}
+        {money ? <DashTile label="Expenses" value={formatINRCompact(expense)} hint="This month" tone="warm" icon={(c) => <TrendingDown size={19} color={c} />} onPress={() => open('/finance?tab=expenses')} /> : null}
+        {money ? <DashTile label="Outstanding payments" value={formatINRCompact(outstanding)} hint={`${unpaidCount} bookings with a balance`} tone={outstanding ? 'warning' : 'success'} icon={(c) => <Wallet size={19} color={c} />} onPress={() => open('/finance?tab=payments-and-refunds')} /> : null}
         <DashTile label="Needs attention" value={queue.length + overdue.length + expiring.length} hint="Tasks, overdue & expiries" tone="warning" icon={(c) => <AlertTriangle size={19} color={c} />} />
       </Grid>
 
@@ -254,6 +259,7 @@ export default function OpsDashboardScreen() {
               </Section>
             </Grid>
 
+            {money ? (
             <Section title="Revenue vs expenses" subtitle="Last three months (₹ thousands)" action={<Button label="Finance" size="sm" variant="ghost" onPress={() => open('/finance')} />}>
               <Card>
                 <BarChart
@@ -266,6 +272,7 @@ export default function OpsDashboardScreen() {
                 />
               </Card>
             </Section>
+            ) : null}
 
             <Section title="Vehicle utilization" subtitle={`Share of the last ${UTILIZATION_DAYS} days out on rent, from bookings on file`} action={<Button label="Tracking" size="sm" variant="ghost" onPress={() => open('/tracking?tab=utilization')} />}>
               <Grid cols={cols(1, 2, 2)} gap={16}>
@@ -349,11 +356,13 @@ export default function OpsDashboardScreen() {
                 />
               </Card>
             </Section>
+            {money ? (
             <Section title="Expenses this month">
               <Card>
                 {expenseSplit.length ? <DonutChart size={130} items={expenseSplit} centerValue={formatINRCompact(expense)} centerLabel="Total" formatValue={formatINRCompact} /> : <EmptyState compact title="No expenses" message="Nothing recorded this month." />}
               </Card>
             </Section>
+            ) : null}
             <Section title="Upcoming maintenance" action={<Button label="Schedule" size="sm" variant="ghost" onPress={() => open('/maintenance?tab=service-schedule')} />}>
               <Card padded={false} style={{ paddingHorizontal: 16 }}>
                 {upcomingService.length === 0 ? (

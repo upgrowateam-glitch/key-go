@@ -1,76 +1,70 @@
-import React, { useMemo, useState } from 'react';
+import React from 'react';
 import { Text, View } from 'react-native';
-import { Check, Minus } from 'lucide-react-native';
-import { Card, ChipGroup, DataTable, EmptyState, Grid, SimulatedNote, StatTile, type Column } from '../../components/kit';
-import { NAV_SECTIONS, type NavSection } from '../../config/navigation';
+import { Eye, Minus, Pencil } from 'lucide-react-native';
+import { Card, DataTable, Grid, StatTile, type Column } from '../../components/kit';
+import { ResourceState } from '../../components/portal/ResourceState';
 import { useResponsive } from '../../hooks/useResponsive';
+import { api } from '../../lib/api';
+import type { Access, Area, StaffRole } from '../../services/auth';
+import { useResource } from '../../services/mockClient';
 import { useThemeColors, useThemedStyles } from '../../theme';
-import type { StaffRole } from '../../services/auth';
-import { ListToolbar, Pager, useListControls } from '../notifications/listControls';
 import { makeSettingsStyles } from './formParts';
 
-const ROLES: StaffRole[] = ['Owner', 'Admin', 'Manager', 'Staff'];
-const ROLE_FILTERS = ['All roles', ...ROLES] as const;
-type RoleFilter = (typeof ROLE_FILTERS)[number];
+interface PermissionTable {
+  areas: { id: Area; label: string }[];
+  roles: Record<StaffRole, Record<Area, Access>>;
+}
 
+const ROLES: StaffRole[] = ['Owner', 'Admin', 'Manager', 'Staff', 'Driver'];
+const loadTable = () => api<PermissionTable>('/auth/permissions');
+
+/** What every role can view or change. This is the table the server enforces on every request. */
 export default function PermissionsTab() {
+  const table = useResource(loadTable);
   const colors = useThemeColors();
   const styles = useThemedStyles(makeSettingsStyles);
   const { cols } = useResponsive();
-  const [filter, setFilter] = useState<RoleFilter>('All roles');
+  if (!table.data) return <ResourceState loading={table.loading} error={table.error} onRetry={table.reload} />;
+  const { areas, roles } = table.data;
 
-  const rows = useMemo(() => (filter === 'All roles' ? NAV_SECTIONS : NAV_SECTIONS.filter((s) => s.roles.includes(filter))), [filter]);
-  const list = useListControls(rows, { search: (s) => `${s.title} ${s.description}`, pageSize: 15 });
+  const cell = (access: Access, role: StaffRole, label: string) =>
+    access === 'edit' ? (
+      <View accessibilityLabel={`${role} can change ${label}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Pencil size={14} color={colors.success} />
+        <Text style={{ color: colors.success, fontSize: 12, fontWeight: '700' }}>Edit</Text>
+      </View>
+    ) : access === 'view' ? (
+      <View accessibilityLabel={`${role} can view ${label}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+        <Eye size={14} color={colors.info} />
+        <Text style={{ color: colors.info, fontSize: 12, fontWeight: '700' }}>View</Text>
+      </View>
+    ) : (
+      <View accessibilityLabel={`${role} has no access to ${label}`}>
+        <Minus size={16} color={colors.muted} />
+      </View>
+    );
 
-  const columns: Column<NavSection>[] = [
-    {
-      key: 'section',
-      label: 'Section',
-      flex: 3,
-      minWidth: 240,
-      render: (s) => (
-        <View style={{ flexShrink: 1 }}>
-          <Text style={styles.title}>{s.title}</Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {s.description}
-          </Text>
-        </View>
-      ),
-    },
-    ...ROLES.map(
-      (role): Column<NavSection> => ({
-        key: role,
-        label: role,
-        minWidth: 80,
-        align: 'center',
-        render: (s) =>
-          s.roles.includes(role) ? (
-            <View accessibilityLabel={`${role} can open ${s.title}`}>
-              <Check size={16} color={colors.success} />
-            </View>
-          ) : (
-            <View accessibilityLabel={`${role} cannot open ${s.title}`}>
-              <Minus size={16} color={colors.muted} />
-            </View>
-          ),
-      })
-    ),
+  const columns: Column<{ id: Area; label: string }>[] = [
+    { key: 'area', label: 'Area', flex: 2, minWidth: 190, render: (a) => <Text style={styles.title}>{a.label}</Text> },
+    ...ROLES.map((role): Column<{ id: Area; label: string }> => ({ key: role, label: role, minWidth: 84, align: 'center', render: (a) => cell(roles[role]?.[a.id] ?? 'none', role, a.label) })),
   ];
 
   return (
     <View>
-      <SimulatedNote>This matrix shows the section access in the portal navigation. It is read-only, and enforcement moves to the backend later: today the check only runs in the browser.</SimulatedNote>
-      <Grid cols={cols(2, 4, 4)} style={{ marginTop: 8 }}>
-        {ROLES.map((role) => (
-          <StatTile key={role} label={role} value={NAV_SECTIONS.filter((s) => s.roles.includes(role)).length} hint={`of ${NAV_SECTIONS.length} sections`} tone={role === 'Owner' ? 'highlight' : role === 'Admin' ? 'primary' : role === 'Manager' ? 'info' : 'neutral'} />
-        ))}
+      <Text style={styles.meta}>
+        The server checks this table on every request, so a role cannot open or change an area from anywhere, not only from this portal. Owner is the Super Admin. Drivers only see their own driver page
+        (assigned trips and duty punch).
+      </Text>
+      <Grid cols={cols(2, 5, 5)} style={{ marginTop: 10 }}>
+        {ROLES.map((role) => {
+          const n = areas.filter((a) => (roles[role]?.[a.id] ?? 'none') !== 'none').length;
+          return <StatTile key={role} label={role} value={role === 'Driver' ? 'Own page' : n} hint={role === 'Driver' ? 'Trips & duty' : `of ${areas.length} areas`} tone={role === 'Owner' ? 'highlight' : role === 'Admin' ? 'primary' : role === 'Manager' ? 'info' : 'neutral'} />;
+        })}
       </Grid>
       <View style={{ height: 16 }} />
-      <ListToolbar controls={list} placeholder="Search sections" filters={<ChipGroup options={ROLE_FILTERS} value={filter} onChange={setFilter} />} />
       <Card padded={false}>
-        <DataTable columns={columns} rows={list.pageRows} rowKey={(s) => s.id} empty={<EmptyState title="No sections" message="Nothing matches this search or role." compact />} />
+        <DataTable columns={columns} rows={areas} rowKey={(a) => a.id} />
       </Card>
-      <Pager controls={list} />
     </View>
   );
 }

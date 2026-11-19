@@ -25,6 +25,7 @@ enum UserRole {
   ADMIN
   MANAGER
   STAFF
+  DRIVER
 }
 
 enum VehicleType {
@@ -127,6 +128,13 @@ model User {
   branchName   String?   @map("branch_name")
   active       Boolean   @default(true)
   lastLoginAt  DateTime? @map("last_login_at")
+  /// For Driver accounts: the driver record (app_records "drivers") this login belongs to.
+  driverId     String?   @map("driver_id")
+  /// Raised to sign the account out everywhere (password change, "sign out of all devices").
+  tokenVersion Int       @default(0) @map("token_version")
+  /// Wrong passwords in a row; the account pauses sign-in for a while after too many.
+  failedLogins Int       @default(0) @map("failed_logins")
+  lockedUntil  DateTime? @map("locked_until")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
@@ -145,6 +153,10 @@ model Customer {
   email            String?            @unique
   /// Set only for customers who registered in the app and can sign in.
   passwordHash     String?            @map("password_hash")
+  /// Raised to sign the customer out everywhere (password change, "sign out of all devices").
+  tokenVersion     Int                @default(0) @map("token_version")
+  failedLogins     Int                @default(0) @map("failed_logins")
+  lockedUntil      DateTime?          @map("locked_until")
   address          String?
   city             String?
   /// Encrypted at rest; only the last four digits are ever returned by the API.

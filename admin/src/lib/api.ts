@@ -64,6 +64,9 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     throw new ApiError('Cannot reach the KeyGo server. Check your internet connection and try again.', 0);
   }
   if (res.status === 401 && token) onUnauthorized?.();
+  // The server renews a sign-in that is in use; keep the fresh token
+  const renewed = res.headers.get('X-KeyGo-Token');
+  if (renewed && token && readToken() === token) storeToken(renewed);
   if (!res.ok) throw await errorFrom(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

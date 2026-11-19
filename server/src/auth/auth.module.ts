@@ -13,8 +13,8 @@ import { AuthService } from './auth.service';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.getOrThrow<string>('JWT_ACCESS_SECRET'),
-        // One long-lived token per sign-in; signing out clears it on the device
-        signOptions: { expiresIn: (config.get<string>('JWT_ACCESS_TTL') || '30d') as never },
+        // A sign-in lasts this long without use; the guard renews it daily while it is being used
+        signOptions: { expiresIn: (config.get<string>('JWT_ACCESS_TTL') || '7d') as never },
       }),
     }),
   ],

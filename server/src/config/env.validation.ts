@@ -38,6 +38,11 @@ class Env {
   @IsOptional()
   @IsString()
   FILE_STORAGE_DIR?: string;
+
+  /** "true" shows the API docs at /docs on the live server (they are always on in development). */
+  @IsOptional()
+  @IsString()
+  ENABLE_API_DOCS?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

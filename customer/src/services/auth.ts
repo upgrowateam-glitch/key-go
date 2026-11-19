@@ -1,6 +1,6 @@
 import '../theme/installStorage';
 import { useSyncExternalStore } from 'react';
-import { api, setApiToken, setUnauthorizedHandler } from '../lib/api';
+import { api, setApiToken, setTokenRenewedHandler, setUnauthorizedHandler } from '../lib/api';
 import type { Customer } from '../types';
 
 const KEY = 'keygo.customer.auth.v2';
@@ -51,8 +51,22 @@ export const useAuth = () => useSyncExternalStore(subscribe, () => state, () => 
 export const completeOnboarding = () => update({ onboarded: true });
 export const signOut = () => update({ token: null, customerId: null });
 
-// A rejected token (expired, or the account was removed) signs the customer out
+// A rejected token (expired, signed out everywhere, or the account was removed) signs the customer out
 setUnauthorizedHandler(signOut);
+// A sign-in in use is renewed by the server; keep the new token
+setTokenRenewedHandler((token) => update({ token }));
+
+/** Changes the password; other devices are signed out, this one stays signed in. */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const { token } = await api<{ token: string }>('/auth/password', { method: 'POST', body: { currentPassword, newPassword } });
+  update({ token });
+}
+
+/** Signs the customer out of KeyGo on every device, including this one. */
+export async function signOutEverywhere() {
+  await api('/auth/sign-out-everywhere', { method: 'POST' });
+  signOut();
+}
 
 interface SessionResponse {
   token: string;

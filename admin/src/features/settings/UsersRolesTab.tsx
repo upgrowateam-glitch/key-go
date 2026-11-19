@@ -1,19 +1,22 @@
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Crown, KeyRound, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
+import { Car, Crown, KeyRound, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
 import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, EmptyState, Field, FormRow, FormSheet, Grid, StatTile, type Column, type Tone } from '../../components/kit';
 import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
-import { useThemedStyles } from '../../theme';
+import { useThemeColors, useThemedStyles } from '../../theme';
 import { branchesStore, createUser, fetchUsers, updateUser, type PortalUser } from '../../services/settings';
 import { readSession, type StaffRole } from '../../services/auth';
 import { useResource } from '../../services/mockClient';
 import { ListToolbar, Pager, useListControls, WithStore } from '../notifications/listControls';
 import { isEmail, makeSettingsStyles } from './formParts';
 
-export const ROLES: StaffRole[] = ['Owner', 'Admin', 'Manager', 'Staff'];
-export const ROLE_TONE: Record<StaffRole, Tone> = { Owner: 'highlight', Admin: 'primary', Manager: 'info', Staff: 'neutral' };
+export const ROLES: StaffRole[] = ['Owner', 'Admin', 'Manager', 'Staff', 'Driver'];
+export const ROLE_TONE: Record<StaffRole, Tone> = { Owner: 'highlight', Admin: 'primary', Manager: 'info', Staff: 'neutral', Driver: 'violet' };
+/** Owner is the Super Admin. */
+const roleLabel = (r: StaffRole) => (r === 'Owner' ? 'Owner (Super Admin)' : r);
+const roleLabels = (roles: StaffRole[]) => Object.fromEntries(roles.map((r) => [r, roleLabel(r)])) as Record<StaffRole, string>;
 const ROLE_FILTERS = ['All', ...ROLES] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
 const NO_BRANCH = 'No branch';
@@ -26,7 +29,8 @@ export default function UsersRolesTab() {
 }
 
 function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows: (rows: PortalUser[]) => void; branchNames: string[] }) {
-  const { showToast } = useApp();
+  const { showToast, drivers } = useApp();
+  const driverName = (id?: string | null) => drivers.find((d) => d.id === id)?.name;
   const styles = useThemedStyles(makeSettingsStyles);
   const { cols } = useResponsive();
   const [filter, setFilter] = useState<RoleFilter>('All');
@@ -84,7 +88,17 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
         </View>
       ),
     },
-    { key: 'role', label: 'Role', minWidth: 90, render: (u) => <Badge label={u.role} tone={ROLE_TONE[u.role]} /> },
+    {
+      key: 'role',
+      label: 'Role',
+      minWidth: 110,
+      render: (u) => (
+        <View style={{ gap: 2 }}>
+          <Badge label={u.role} tone={ROLE_TONE[u.role]} />
+          {u.role === 'Driver' ? <Text style={styles.meta}>{driverName(u.driverId) ?? 'Driver record missing'}</Text> : null}
+        </View>
+      ),
+    },
     { key: 'branch', label: 'Branch', flex: 1.2, minWidth: 150, render: (u) => <Text style={styles.meta}>{u.branch || '—'}</Text> },
     { key: 'status', label: 'Status', minWidth: 90, render: (u) => <Badge label={u.active ? 'Active' : 'Disabled'} tone={u.active ? 'success' : 'neutral'} /> },
     { key: 'lastActive', label: 'Last sign-in', minWidth: 100 },
@@ -106,11 +120,12 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   return (
     <View>
       <Text style={styles.meta}>Each person signs in with their own email and password. Roles decide which sections they can open, and the server enforces it.</Text>
-      <Grid cols={cols(2, 4, 4)} style={{ marginTop: 8 }}>
+      <Grid cols={cols(2, 5, 5)} style={{ marginTop: 8 }}>
         <StatTile label="Owners" value={rows.filter((u) => u.role === 'Owner').length} tone="highlight" icon={(c) => <Crown size={16} color={c} />} />
         <StatTile label="Admins" value={rows.filter((u) => u.role === 'Admin').length} tone="primary" icon={(c) => <ShieldCheck size={16} color={c} />} />
         <StatTile label="Managers" value={rows.filter((u) => u.role === 'Manager').length} tone="info" icon={(c) => <UserCog size={16} color={c} />} />
         <StatTile label="Staff" value={rows.filter((u) => u.role === 'Staff').length} tone="neutral" icon={(c) => <Users size={16} color={c} />} />
+        <StatTile label="Drivers" value={rows.filter((u) => u.role === 'Driver').length} tone="violet" icon={(c) => <Car size={16} color={c} />} />
       </Grid>
       <View style={[styles.toolbar, { marginTop: 16 }]}>
         <Text style={styles.meta}>
@@ -143,9 +158,11 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
         <RoleSheet
           user={editingRole}
           canMakeOwner={me?.role === 'Owner'}
+          drivers={drivers.map((d) => ({ id: d.id, name: d.name }))}
+          takenDriverIds={rows.filter((x) => x.id !== editingRole.id && x.driverId).map((x) => x.driverId!)}
           onClose={() => setEditingRole(null)}
-          onSave={async (role) => {
-            const saved = await run(() => updateUser(editingRole.id, { role }), (u) => `${u.name} is now ${u.role}`);
+          onSave={async (role, driverId) => {
+            const saved = await run(() => updateUser(editingRole.id, { role, driverId }), (u) => `${u.name} is now ${u.role}`);
             if (saved) replace(saved);
             setEditingRole(null);
           }}
@@ -180,10 +197,27 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   );
 }
 
-function RoleSheet({ user, canMakeOwner, onClose, onSave }: { user: PortalUser; canMakeOwner: boolean; onClose: () => void; onSave: (role: StaffRole) => void }) {
+function RoleSheet({
+  user,
+  canMakeOwner,
+  drivers,
+  takenDriverIds,
+  onClose,
+  onSave,
+}: {
+  user: PortalUser;
+  canMakeOwner: boolean;
+  drivers: { id: string; name: string }[];
+  takenDriverIds: string[];
+  onClose: () => void;
+  onSave: (role: StaffRole, driverId?: string) => void;
+}) {
   const styles = useThemedStyles(makeSettingsStyles);
   const [role, setRole] = useState<StaffRole>(user.role);
+  const [driverId, setDriverId] = useState<string | undefined>(user.driverId ?? undefined);
   const options = canMakeOwner ? ROLES : ROLES.filter((r) => r !== 'Owner');
+  const needsDriver = role === 'Driver' && !driverId;
+  const unchanged = role === user.role && (role !== 'Driver' || driverId === user.driverId);
   return (
     <FormSheet
       visible
@@ -192,12 +226,13 @@ function RoleSheet({ user, canMakeOwner, onClose, onSave }: { user: PortalUser; 
       footer={
         <>
           <Button label="Keep as is" variant="ghost" onPress={onClose} />
-          <Button label={`Make ${role}`} disabled={role === user.role} onPress={() => onSave(role)} />
+          <Button label={`Make ${role}`} disabled={unchanged || needsDriver} onPress={() => onSave(role, role === 'Driver' ? driverId : undefined)} />
         </>
       }>
       <Text style={styles.label}>New role</Text>
-      <ChipGroup options={options} value={role} onChange={setRole} />
-      <Text style={[styles.meta, { marginTop: 10 }]}>The Permissions tab shows which sections each role can open.</Text>
+      <ChipGroup options={options} value={role} onChange={setRole} labels={roleLabels(options)} />
+      {role === 'Driver' ? <DriverPicker drivers={drivers} taken={takenDriverIds} value={driverId} onChange={setDriverId} /> : null}
+      <Text style={[styles.meta, { marginTop: 10 }]}>The Permissions tab shows what each role can view or change. Changing a role signs the person out on every device.</Text>
     </FormSheet>
   );
 }
@@ -239,8 +274,10 @@ function AddUserSheet({
   branchNames: string[];
   canAddOwner: boolean;
   onClose: () => void;
-  onSave: (input: { name: string; email: string; role: StaffRole; branch: string; password: string }) => void;
+  onSave: (input: { name: string; email: string; role: StaffRole; branch: string; password: string; driverId?: string }) => void;
 }) {
+  const { drivers } = useApp();
+  const [driverId, setDriverId] = useState<string | undefined>();
   const styles = useThemedStyles(makeSettingsStyles);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -253,11 +290,12 @@ function AddUserSheet({
   const nameError = !name.trim() ? 'Name is required' : undefined;
   const emailError = !isEmail(email) ? 'Enter a valid email address' : rows.some((u) => u.email.toLowerCase() === email.trim().toLowerCase()) ? 'This email already has a user' : undefined;
   const passwordError = password.length < 8 ? 'Use at least 8 characters' : undefined;
+  const driverError = role === 'Driver' && !driverId ? 'Choose the driver this account is for' : undefined;
 
   const submit = () => {
     setTouched(true);
-    if (nameError || emailError || passwordError) return;
-    onSave({ name: name.trim(), email: email.trim().toLowerCase(), role, branch: branch === NO_BRANCH ? '' : branch, password });
+    if (nameError || emailError || passwordError || driverError) return;
+    onSave({ name: name.trim(), email: email.trim().toLowerCase(), role, branch: branch === NO_BRANCH ? '' : branch, password, driverId: role === 'Driver' ? driverId : undefined });
   };
 
   return (
@@ -277,9 +315,36 @@ function AddUserSheet({
       </FormRow>
       <Field label="Starting password" required secureTextEntry value={password} onChangeText={setPassword} error={touched ? passwordError : undefined} hint="Share it with them privately. You can reset it later." />
       <Text style={styles.label}>Role</Text>
-      <ChipGroup options={canAddOwner ? ROLES : ROLES.filter((r) => r !== 'Owner')} value={role} onChange={setRole} />
+      <ChipGroup options={canAddOwner ? ROLES : ROLES.filter((r) => r !== 'Owner')} value={role} onChange={setRole} labels={roleLabels(ROLES)} />
+      {role === 'Driver' ? (
+        <DriverPicker
+          drivers={drivers.map((d) => ({ id: d.id, name: d.name }))}
+          taken={rows.filter((u) => u.driverId).map((u) => u.driverId!)}
+          value={driverId}
+          onChange={setDriverId}
+          error={touched ? driverError : undefined}
+        />
+      ) : null}
       <Text style={[styles.label, { marginTop: 14 }]}>Branch</Text>
       <ChipGroup options={branchOptions} value={branch} onChange={setBranch} />
     </FormSheet>
+  );
+}
+
+/** Chooses which driver record a Driver account belongs to; drivers who already have an account are left out. */
+function DriverPicker({ drivers, taken, value, onChange, error }: { drivers: { id: string; name: string }[]; taken: string[]; value?: string; onChange: (id: string) => void; error?: string }) {
+  const styles = useThemedStyles(makeSettingsStyles);
+  const colors = useThemeColors();
+  const free = drivers.filter((d) => !taken.includes(d.id) || d.id === value);
+  return (
+    <View style={{ marginTop: 14 }}>
+      <Text style={styles.label}>Driver</Text>
+      {free.length ? (
+        <ChipGroup options={free.map((d) => d.id)} value={value ?? ''} onChange={onChange} labels={Object.fromEntries(free.map((d) => [d.id, d.name]))} />
+      ) : (
+        <Text style={styles.meta}>Every driver already has an account, or no drivers are added yet. Add the driver under Drivers & Staff → Drivers first.</Text>
+      )}
+      {error ? <Text style={[styles.meta, { color: colors.danger, marginTop: 6 }]}>{error}</Text> : null}
+    </View>
   );
 }

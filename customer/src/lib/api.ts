@@ -23,6 +23,12 @@ export const setApiToken = (token: string | null) => {
   currentToken = token;
 };
 
+/** Called when the server sends a renewed sign-in token, so the app keeps it. */
+let onRenewed: ((token: string) => void) | null = null;
+export const setTokenRenewedHandler = (fn: ((token: string) => void) | null) => {
+  onRenewed = fn;
+};
+
 /** Called when the server rejects the token, so the app can return to sign-in. */
 export const setUnauthorizedHandler = (fn: (() => void) | null) => {
   onUnauthorized = fn;
@@ -40,6 +46,9 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
     throw new ApiError('Cannot reach KeyGo. Check your internet connection and try again.', 0);
   }
   if (res.status === 401 && token) onUnauthorized?.();
+  // The server renews a sign-in that is in use; keep the fresh token
+  const renewed = res.headers.get('X-KeyGo-Token');
+  if (renewed && token && token === currentToken) onRenewed?.(renewed);
   if (!res.ok) {
     let message = `KeyGo answered ${res.status}. Please try again.`;
     try {

@@ -112,6 +112,7 @@ export const roleEnum = labelEnum('staff role', {
   Admin: UserRole.ADMIN,
   Manager: UserRole.MANAGER,
   Staff: UserRole.STAFF,
+  Driver: UserRole.DRIVER,
 });
 
-export type StaffRoleLabel = 'Owner' | 'Admin' | 'Manager' | 'Staff';
+export type StaffRoleLabel = 'Owner' | 'Admin' | 'Manager' | 'Staff' | 'Driver';

@@ -1,9 +1,11 @@
 import { useRouter } from '@/shims/expo-router';
-import { Pencil, Star, UserRound, Users } from 'lucide-react-native';
+import { KeyRound, Pencil, Star, UserRound, Users } from 'lucide-react-native';
 import { useRouter as useNextRouter, useParams, usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Avatar, Badge, Button, Card, Divider, EmptyState, KeyValueGrid, PageHeader, PageTabs, Screen, SplitView, StatusBadge } from '../../components/kit';
+import { Avatar, Badge, Button, Card, Divider, EmptyState, Field, FormSheet, KeyValueGrid, PageHeader, PageTabs, Screen, SplitView, StatusBadge } from '../../components/kit';
+import { useStaffSession } from '../../components/portal/PortalShell';
+import { api } from '../../lib/api';
 import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
 import { formatDate, formatINR } from '../../lib/format';
@@ -77,7 +79,11 @@ function Profile({ id }: { id: string }) {
   const nextRouter = useNextRouter();
   const pathname = usePathname();
   const search = useSearchParams();
-  const { customers, bookings, updateCustomer } = useApp();
+  const { customers, bookings, updateCustomer, showToast } = useApp();
+  const { session } = useStaffSession();
+  // Matches the server: Owners (Super Admin), Admins and Managers reset customer app passwords
+  const canResetPassword = !!session && ['Owner', 'Admin', 'Manager'].includes(session.role);
+  const [resetting, setResetting] = useState(false);
   const customer = customers.find((c) => c.id === id);
   const activity = useResource(() => loadCustomerActivity(id));
   const [editing, setEditing] = useState(false);
@@ -142,12 +148,34 @@ function Profile({ id }: { id: string }) {
         title={customer.name}
         subtitle={`${id} · since ${formatDate(customer.customerSince)}`}
         back
-        actions={<Button label="Edit customer" variant="outline" icon={(c) => <Pencil size={14} color={c} />} onPress={() => setEditing(true)} />}
+        actions={
+          <>
+            {canResetPassword && customer.email ? <Button label="Reset app password" variant="outline" icon={(c) => <KeyRound size={14} color={c} />} onPress={() => setResetting(true)} /> : null}
+            <Button label="Edit customer" variant="outline" icon={(c) => <Pencil size={14} color={c} />} onPress={() => setEditing(true)} />
+          </>
+        }
       />
       <View style={{ marginTop: 16 }}>
         <SplitView main={main} side={<ProfileSummary customer={customer} stats={stats} />} sideWidth={340} />
       </View>
       {editing ? <CustomerForm customer={customer} onClose={() => setEditing(false)} onSaved={refreshActivity} /> : null}
+      {resetting ? (
+        <ResetPasswordSheet
+          name={customer.name}
+          onClose={() => setResetting(false)}
+          onSave={async (password) => {
+            try {
+              await api(`/admin/customers/${encodeURIComponent(id)}/password`, { method: 'PUT', body: { password } });
+              logCustomerActivity(id, [{ action: 'App password reset by staff (signed out on all devices)' }]);
+              refreshActivity();
+              showToast(`New app password set for ${customer.name}. Share it with them privately.`);
+              setResetting(false);
+            } catch (e) {
+              showToast((e as Error).message);
+            }
+          }}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -160,5 +188,40 @@ export default function CustomerProfile() {
     <Suspense fallback={null}>
       <Profile key={id} id={id} />
     </Suspense>
+  );
+}
+
+/** Staff set a new app password for a customer who forgot theirs (no email or SMS reset yet). */
+function ResetPasswordSheet({ name, onClose, onSave }: { name: string; onClose: () => void; onSave: (password: string) => void }) {
+  const [password, setPassword] = useState('');
+  const [touched, setTouched] = useState(false);
+  const error = password.length < 8 ? 'Use at least 8 characters' : undefined;
+  return (
+    <FormSheet
+      visible
+      title={`Reset app password: ${name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button label="Cancel" variant="ghost" onPress={onClose} />
+          <Button
+            label="Set password"
+            onPress={() => {
+              setTouched(true);
+              if (!error) onSave(password);
+            }}
+          />
+        </>
+      }>
+      <Field
+        label="New password"
+        required
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        error={touched ? error : undefined}
+        hint="Check the customer's identity first. Share the password privately; they can change it in the app under Profile → Privacy & Security."
+      />
+    </FormSheet>
   );
 }

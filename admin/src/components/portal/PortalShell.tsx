@@ -3,21 +3,24 @@
 import React, { ReactNode, Suspense, useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Bell, ChevronDown, ChevronRight, LogOut, Menu, Settings } from 'lucide-react-native';
+import { Bell, ChevronDown, ChevronRight, KeyRound, LogOut, Menu, MonitorSmartphone, Settings } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AppProvider, useApp } from '../../context/AppContext';
 import { ThemeProvider, useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
 import { KeyGoLogo } from '../ui/KeyGoLogo';
 import { KeyGoToast } from '../ui/KeyGoToast';
-import { sectionForPath } from '../../config/navigation';
+import { canOpen, sectionForPath } from '../../config/navigation';
+import { DriverHome } from '../../features/driver/DriverHome';
+import { ChangePasswordSheet } from './AccountSheets';
 import { activeSidebarItem, hrefOf, SIDEBAR, type SidebarItem } from '../../config/sidebar';
-import { readSession, refreshSession, signOut, type StaffSession } from '../../services/auth';
+import { canAccess, readSession, refreshSession, signOut, signOutEverywhere, type StaffSession } from '../../services/auth';
 import { setUnauthorizedHandler } from '../../lib/api';
 import { onServerStateError } from '../../lib/serverState';
 import { loadWorkspace } from '../../services/workspace';
 import { useResource } from '../../services/mockClient';
 import { ConfirmDialog, EmptyState, Screen } from '../kit';
+import { KeyGoToastView } from '../ui/KeyGoToast';
 import { ResourceState } from './ResourceState';
 
 const SessionContext = React.createContext<{ session: StaffSession | null; refresh: () => void }>({ session: null, refresh: () => {} });
@@ -33,8 +36,8 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
   // Items whose page this role may open; groups left empty are hidden
   const groups = useMemo(
     () =>
-      SIDEBAR.map((g) => ({ ...g, items: g.items.filter((i) => sectionForPath(i.path)?.roles.includes(session.role) ?? true) })).filter((g) => g.items.length > 0),
-    [session.role]
+      SIDEBAR.map((g) => ({ ...g, items: g.items.filter((i) => { const sec = sectionForPath(i.path); return sec ? canOpen(session, sec) : true; }) })).filter((g) => g.items.length > 0),
+    [session]
   );
   const active = activeSidebarItem(
     groups.flatMap((g) => g.items),
@@ -147,17 +150,27 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
   );
 }
 
-function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => void }) {
+function NavbarWithAlerts({ session, onMenu }: { session: StaffSession; onMenu?: () => void }) {
+  const { notifications, showToast } = useApp();
+  const unread = notifications.filter((n) => n.unread && !n.customerId).length;
+  return <Navbar session={session} onMenu={onMenu} unread={unread} notify={showToast} />;
+}
+
+function Navbar({ session, onMenu, unread, notify }: { session: StaffSession; onMenu?: () => void; unread?: number; notify: (message: string) => void }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { isPhone } = useResponsive();
-  const { notifications } = useApp();
-  const unread = notifications.filter((n) => n.unread && !n.customerId).length;
   const { refresh } = useStaffSession();
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const canManage = session.role === 'Owner' || session.role === 'Admin';
+  const [confirmEverywhere, setConfirmEverywhere] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const canManage = canAccess(session, 'users', 'edit');
+  const leave = () => {
+    refresh();
+    router.replace('/login');
+  };
 
   return (
     <View style={styles.header}>
@@ -174,6 +187,14 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
                 <Text style={styles.menuItemText}>Users & settings</Text>
               </TouchableOpacity>
             ) : null}
+            <TouchableOpacity accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenuOpen(false); setChangingPassword(true); }}>
+              <KeyRound size={16} color={colors.txt} />
+              <Text style={styles.menuItemText}>Change password</Text>
+            </TouchableOpacity>
+            <TouchableOpacity accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenuOpen(false); setConfirmEverywhere(true); }}>
+              <MonitorSmartphone size={16} color={colors.txt} />
+              <Text style={styles.menuItemText}>Sign out of all devices</Text>
+            </TouchableOpacity>
             <TouchableOpacity accessibilityRole="button" style={styles.menuItem} onPress={() => { setMenuOpen(false); setConfirmSignOut(true); }}>
               <LogOut size={16} color={colors.danger} />
               <Text style={[styles.menuItemText, { color: colors.danger }]}>Sign out</Text>
@@ -191,10 +212,35 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
         onConfirm={() => {
           setConfirmSignOut(false);
           signOut();
-          refresh();
-          router.replace('/login');
+          leave();
         }}
       />
+      <ConfirmDialog
+        visible={confirmEverywhere}
+        title="Sign out of all devices?"
+        message="Every browser and phone signed in to your account, including this one, will be signed out. Use this if you think someone else knows your password."
+        confirmLabel="Sign out everywhere"
+        danger
+        onCancel={() => setConfirmEverywhere(false)}
+        onConfirm={async () => {
+          setConfirmEverywhere(false);
+          try {
+            await signOutEverywhere();
+            leave();
+          } catch (e) {
+            notify((e as Error).message);
+          }
+        }}
+      />
+      {changingPassword ? (
+        <ChangePasswordSheet
+          onClose={() => setChangingPassword(false)}
+          onDone={() => {
+            setChangingPassword(false);
+            notify('Password changed. Other devices were signed out.');
+          }}
+        />
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
         {onMenu ? (
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="Open navigation" style={styles.iconBtn} onPress={onMenu}>
@@ -210,14 +256,16 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
           </Text>
           <ChevronDown size={15} color={colors.onNav} />
         </TouchableOpacity>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Notifications, ${unread} unread`} style={styles.iconBtn} onPress={() => router.push('/notifications')}>
-          <Bell size={18} color={colors.onNav} />
-          {unread > 0 ? (
-            <View style={styles.notifDot}>
-              <Text style={styles.notifCount}>{unread}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
+        {unread !== undefined ? (
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Notifications, ${unread} unread`} style={styles.iconBtn} onPress={() => router.push('/notifications')}>
+            <Bell size={18} color={colors.onNav} />
+            {unread > 0 ? (
+              <View style={styles.notifDot}>
+                <Text style={styles.notifCount}>{unread}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        ) : null}
       </View>
     </View>
   );
@@ -230,11 +278,11 @@ function PortalFrame({ session, children }: { session: StaffSession; children: R
   const [drawer, setDrawer] = useState(false);
   const pathname = usePathname();
   const section = sectionForPath(pathname);
-  const allowed = !section || section.roles.includes(session.role);
+  const allowed = !section || canOpen(session, section);
 
   return (
     <View style={styles.frame}>
-      <Navbar session={session} onMenu={isDesktop ? undefined : () => setDrawer(true)} />
+      <NavbarWithAlerts session={session} onMenu={isDesktop ? undefined : () => setDrawer(true)} />
       <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
         {isDesktop ? <Sidebar session={session} /> : null}
         <View style={[styles.content, isDesktop ? styles.contentDesktop : styles.contentCompact]}>
@@ -270,6 +318,26 @@ function SaveErrors() {
   const { showToast } = useApp();
   useEffect(() => onServerStateError(showToast), [showToast]);
   return null;
+}
+
+/** Drivers get their own page only: assignments and duty punch. */
+function DriverFrame({ session }: { session: StaffSession }) {
+  const styles = useThemedStyles(makeStyles);
+  const [toast, setToast] = useState('');
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 3200);
+    return () => clearTimeout(t);
+  }, [toast]);
+  return (
+    <View style={styles.frame}>
+      <Navbar session={session} notify={setToast} />
+      <View style={[styles.content, styles.contentCompact]}>
+        <DriverHome session={session} notify={setToast} />
+      </View>
+      <KeyGoToastView message={toast} onHide={() => setToast('')} />
+    </View>
+  );
 }
 
 /** Loads everything from the server once the staff member is signed in. */
@@ -313,13 +381,26 @@ function Workspace({ children }: { children: ReactNode }) {
 
   // Pick up role or name changes made by an administrator since the last visit
   useEffect(() => {
-    if (session) refreshSession().then(setSession, () => undefined);
+    if (session) refreshSession().then(setSession, () => (session.permissions ? undefined : (signOut(), setSession(null))));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id]);
 
   return (
     <SessionContext.Provider value={{ session, refresh }}>
-      {isLogin ? children : session ? <SignedIn key={session.id} session={session}>{children}</SignedIn> : null}
+      {isLogin ? (
+        children
+      ) : !session ? null : !session.permissions ? (
+        // A session saved before permissions existed: wait for the server's copy
+        <Screen>
+          <ResourceState loading />
+        </Screen>
+      ) : session.role === 'Driver' ? (
+        <DriverFrame session={session} />
+      ) : (
+        <SignedIn key={session.id} session={session}>
+          {children}
+        </SignedIn>
+      )}
     </SessionContext.Provider>
   );
 }

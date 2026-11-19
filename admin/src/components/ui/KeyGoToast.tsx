@@ -5,21 +5,24 @@ import { useApp } from '../../context/AppContext';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 
 export const KeyGoToast: React.FC = () => {
+  const { toast } = useApp();
+  return <KeyGoToastView message={toast.visible ? toast.message : ''} />;
+};
+
+/** The toast itself, for pages without the main data store (the driver page). */
+export function KeyGoToastView({ message }: { message: string; onHide?: () => void }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { toast } = useApp();
-
-  if (!toast.visible) return null;
-
+  if (!message) return null;
   return (
     <Animated.View style={styles.toastContainer}>
       <View style={styles.iconWrap}>
         <CheckCircle2 size={16} color={colors.accentText} />
       </View>
-      <Text style={styles.toastText}>{toast.message}</Text>
+      <Text style={styles.toastText}>{message}</Text>
     </Animated.View>
   );
-};
+}
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({

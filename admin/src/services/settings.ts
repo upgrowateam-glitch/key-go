@@ -46,15 +46,17 @@ export interface PortalUser {
   email: string;
   role: StaffRole;
   branch: string;
+  /** Driver accounts: the driver record they belong to. */
+  driverId?: string | null;
   active: boolean;
   lastActive: string;
 }
 
 /** Staff accounts live in the users table on the server, so they can sign in. Owners and Admins manage them. */
 export const fetchUsers = () => api<PortalUser[]>('/admin/users');
-export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password: string }) =>
+export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password: string; driverId?: string }) =>
   api<PortalUser>('/admin/users', { method: 'POST', body: input });
-export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active'>> & { password?: string }) =>
+export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active'>> & { password?: string; driverId?: string }) =>
   api<PortalUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
 
 export interface PricingSettings {
