@@ -16,7 +16,7 @@ import { setUnauthorizedHandler } from '../../lib/api';
 import { onServerStateError } from '../../lib/serverState';
 import { loadWorkspace } from '../../services/workspace';
 import { useResource } from '../../services/mockClient';
-import { EmptyState, Screen } from '../kit';
+import { ConfirmDialog, EmptyState, Screen } from '../kit';
 import { ResourceState } from './ResourceState';
 
 const SessionContext = React.createContext<{ session: StaffSession | null; refresh: () => void }>({ session: null, refresh: () => {} });
@@ -51,6 +51,8 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
     router.push(href);
     onNavigate?.();
   };
+  const { refresh } = useStaffSession();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   // One group open at a time; the group of the current page opens by itself
   const activeGroup = groups.find((g) => active && g.items.includes(active))?.title;
@@ -79,7 +81,8 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
   };
 
   return (
-    <ScrollView style={styles.sidebar} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+    <View style={styles.sidebar}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
       {groups.map((g) => {
         // A group with a single page (Overview → Dashboard) is just that page's link
         if (g.items.length === 1) return link(g.items[0], false);
@@ -106,6 +109,36 @@ function Sidebar({ session, onNavigate }: { session: StaffSession; onNavigate?: 
         );
       })}
     </ScrollView>
+      <View style={styles.sidebarFooter}>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.footerName} numberOfLines={1}>
+            {session.name}
+          </Text>
+          <Text style={styles.footerRole} numberOfLines={1}>
+            {session.role}
+          </Text>
+        </View>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Sign out" style={styles.signOut} onPress={() => setConfirmSignOut(true)}>
+          <LogOut size={16} color={colors.onNav} />
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
+      </View>
+      <ConfirmDialog
+        visible={confirmSignOut}
+        title="Sign out of KeyGo Admin?"
+        message="You will need your email and password to sign in again."
+        confirmLabel="Sign out"
+        danger
+        onCancel={() => setConfirmSignOut(false)}
+        onConfirm={() => {
+          setConfirmSignOut(false);
+          onNavigate?.();
+          signOut();
+          refresh();
+          router.replace('/login');
+        }}
+      />
+    </View>
   );
 }
 
@@ -115,7 +148,6 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
   const router = useRouter();
   const { isPhone } = useResponsive();
   const { notifications } = useApp();
-  const { refresh } = useStaffSession();
   const unread = notifications.filter((n) => n.unread && !n.customerId).length;
 
   return (
@@ -143,17 +175,6 @@ function Navbar({ session, onMenu }: { session: StaffSession; onMenu?: () => voi
               <Text style={styles.notifCount}>{unread}</Text>
             </View>
           ) : null}
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Sign out"
-          style={styles.iconBtn}
-          onPress={() => {
-            signOut();
-            refresh();
-            router.replace('/login');
-          }}>
-          <LogOut size={18} color={colors.onNav} />
         </TouchableOpacity>
       </View>
     </View>
@@ -284,6 +305,11 @@ const makeStyles = (colors: ThemeColors) =>
     notifDot: { position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, paddingHorizontal: 4, borderRadius: 9, backgroundColor: colors.highlight, borderWidth: 2, borderColor: colors.nav, alignItems: 'center', justifyContent: 'center' },
     notifCount: { color: colors.onHighlight, fontSize: 9, fontWeight: '800' },
     sidebar: { width: 288, flexGrow: 0, flexShrink: 0, backgroundColor: colors.nav, borderRightWidth: 1, borderRightColor: colors.navLine },
+    sidebarFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: colors.navLine },
+    footerName: { color: colors.onNav, fontSize: 13.5, fontWeight: '700' },
+    footerRole: { color: colors.navInactive, fontSize: 12, marginTop: 1 },
+    signOut: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10, backgroundColor: colors.navLine },
+    signOutText: { color: colors.onNav, fontSize: 13, fontWeight: '700' },
     item: { flexDirection: 'row', alignItems: 'center', gap: 11, borderRadius: 10, marginHorizontal: 10, marginVertical: 2, paddingHorizontal: 12, paddingVertical: 10 },
     // Sub-items sit under their group, along a thin guide line
     subList: { marginLeft: 31, marginRight: 10, marginBottom: 6, borderLeftWidth: 1, borderLeftColor: withAlpha(colors.onNav, 0.14) },
