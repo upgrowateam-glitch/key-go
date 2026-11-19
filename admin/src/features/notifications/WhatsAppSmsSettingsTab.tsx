@@ -7,6 +7,8 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { useThemeColors, useThemedStyles } from '../../theme';
 import { providersStore, type ProviderConfig } from '../../services/notifications';
 import { WithStore } from './listControls';
+import { WhatsAppLinkCard } from './WhatsAppLinkCard';
+import { useStaffSession } from '../../components/portal/PortalShell';
 import { CHANNEL_LABELS, CHANNEL_TYPES, ChannelSwitch, makeStyles, TEMPLATES, TYPE_META, useSendTest, type ChannelType } from './shared';
 
 export default function WhatsAppSmsSettingsTab() {
@@ -20,6 +22,8 @@ function ChannelsTab({ configs, setConfigs }: { configs: ProviderConfig[]; setCo
   const { cols, isPhone } = useResponsive();
   const [previewType, setPreviewType] = useState<ChannelType>('booking');
   const sendTest = useSendTest();
+  const { session } = useStaffSession();
+  const canLinkWhatsApp = session?.role === 'Owner' || session?.role === 'Admin';
   const [editing, setEditing] = useState<ProviderKey | null>(null);
   const [clearing, setClearing] = useState<ProviderKey | null>(null);
   const configOf = (key: ProviderKey) => configs.find((c) => c.key === key)!;
@@ -44,7 +48,8 @@ function ChannelsTab({ configs, setConfigs }: { configs: ProviderConfig[]; setCo
 
   return (
     <View>
-      <Section title="Providers" subtitle="Connect messaging providers once the backend is available" style={{ marginTop: 0 }}>
+      {canLinkWhatsApp ? <WhatsAppLinkCard /> : null}
+      <Section title="Providers" subtitle="Connect messaging providers once the backend is available" style={canLinkWhatsApp ? undefined : { marginTop: 0 }}>
         <Grid cols={cols(1, 2, 2)} gap={16}>
           {providers.map((p) => (
             <Card key={p.key}>

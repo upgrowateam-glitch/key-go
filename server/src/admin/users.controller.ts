@@ -1,28 +1,44 @@
 import { BadRequestException, Body, ConflictException, Controller, ForbiddenException, Get, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { User } from '@prisma/client';
 import { hash } from 'bcryptjs';
-import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, StaffOnly, type AuthPayload } from '../auth/auth.decorators';
 import { newInvite, unusablePassword } from '../auth/invites';
 import { roleEnum, type StaffRoleLabel } from '../common/enums';
 import { StoreService } from '../domain/store.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { whatsappDigits, WhatsAppService } from '../whatsapp/whatsapp.service';
+
+const PHONE = /^\+?[0-9\s-]{10,16}$/;
+
+class InviteDto {
+  /** Send the invitation on WhatsApp from KeyGo's linked number. */
+  @IsOptional() @IsBoolean() sendWhatsApp?: boolean;
+  /** The admin site address the link should open (window.location.origin). */
+  @IsOptional() @IsString() @MaxLength(200) inviteBaseUrl?: string;
+}
 
 const ROLES: StaffRoleLabel[] = ['Owner', 'Admin', 'Manager', 'Staff', 'Driver'];
 
 class CreateUserDto {
   @IsString() @MinLength(1) @MaxLength(80) name: string;
-  @IsEmail({}, { message: 'Enter a valid email address.' }) email: string;
+  /** Optional when a WhatsApp number is given; either can be used to sign in. */
+  @IsOptional() @IsEmail({}, { message: 'Enter a valid email address.' }) email?: string;
+  @IsOptional() @Matches(PHONE, { message: 'Enter a valid WhatsApp number.' }) phone?: string;
   @IsIn(ROLES) role: StaffRoleLabel;
   @IsOptional() @IsString() @MaxLength(80) branch?: string;
   /** Driver accounts: the driver record this login belongs to. */
   @IsOptional() @IsString() @MaxLength(80) driverId?: string;
   /** Leave out to send an invitation link instead; the person then sets their own password. */
   @IsOptional() @IsString() @MinLength(8, { message: 'Use at least 8 characters for the password.' }) password?: string;
+  @IsOptional() @IsBoolean() sendWhatsApp?: boolean;
+  @IsOptional() @IsString() @MaxLength(200) inviteBaseUrl?: string;
 }
 
 class UpdateUserDto {
+  @IsOptional() @IsString() @MaxLength(20) phone?: string;
   @IsOptional() @IsString() @MinLength(1) @MaxLength(80) name?: string;
   @IsOptional() @IsIn(ROLES) role?: StaffRoleLabel;
   @IsOptional() @IsString() @MaxLength(80) branch?: string;
@@ -40,7 +56,8 @@ const lastActive = (d: Date | null) => {
 const toApi = (u: User) => ({
   id: u.id,
   name: u.name,
-  email: u.email,
+  email: u.email ?? '',
+  phone: u.phone ? `+${u.phone}` : '',
   role: roleEnum.fromDb(u.role),
   branch: u.branchName ?? '',
   driverId: u.driverId ?? null,
@@ -60,6 +77,8 @@ export class UsersController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly store: StoreService,
+    private readonly whatsapp: WhatsAppService,
+    private readonly config: ConfigService,
   ) {}
 
   @Get()
@@ -72,14 +91,19 @@ export class UsersController {
   @ApiOperation({ summary: 'Create a staff account, with a starting password or (no password) a one-time invitation link' })
   async create(@Body() body: CreateUserDto, @CurrentUser() me: AuthPayload) {
     if (body.role === 'Owner' && me.role !== 'Owner') throw new ForbiddenException('Only an Owner can create another Owner.');
-    const email = body.email.trim().toLowerCase();
-    if (await this.prisma.user.count({ where: { email } })) throw new ConflictException('A staff account with this email already exists.');
+    const email = body.email?.trim().toLowerCase() || null;
+    const phone = body.phone ? whatsappDigits(body.phone) : null;
+    if (!email && !phone) throw new BadRequestException('Enter an email or a WhatsApp number.');
+    if (email && (await this.prisma.user.count({ where: { email } }))) throw new ConflictException('A staff account with this email already exists.');
+    if (phone && (await this.prisma.user.count({ where: { phone } }))) throw new ConflictException('A staff account with this WhatsApp number already exists.');
+    if (body.sendWhatsApp && !phone) throw new BadRequestException('Enter a WhatsApp number to send the invitation on WhatsApp.');
     const driverId = await this.checkDriver(body.role, body.driverId);
     const invite = body.password ? null : newInvite();
     const user = await this.prisma.user.create({
       data: {
         name: body.name.trim(),
         email,
+        phone,
         role: roleEnum.toDb(body.role),
         branchName: body.branch?.trim() || null,
         driverId,
@@ -89,7 +113,8 @@ export class UsersController {
       },
     });
     // The invitation token is returned only here; the server keeps just its hash
-    return { ...toApi(user), inviteToken: invite?.token };
+    const sent = invite && body.sendWhatsApp ? await this.sendInviteMessage(user, invite.token, body.inviteBaseUrl) : undefined;
+    return { ...toApi(user), inviteToken: invite?.token, ...sent };
   }
 
   @Patch(':id')
@@ -118,6 +143,7 @@ export class UsersController {
         branchName: body.branch === undefined ? undefined : body.branch.trim() || null,
         active: body.active,
         driverId,
+        phone: body.phone === undefined ? undefined : body.phone.trim() ? whatsappDigits(body.phone) : null,
         passwordHash: body.password ? await hash(body.password, 10) : undefined,
         tokenVersion: signOut ? { increment: 1 } : undefined,
         failedLogins: body.password ? 0 : undefined,
@@ -131,8 +157,8 @@ export class UsersController {
   }
 
   @Post(':id/invite')
-  @ApiOperation({ summary: 'Make a new invitation link (the old one stops working); the person sets a new password with it' })
-  async invite(@Param('id') id: string, @CurrentUser() me: AuthPayload) {
+  @ApiOperation({ summary: 'Make a new invitation link (the old one stops working), optionally sending it on WhatsApp' })
+  async invite(@Param('id') id: string, @CurrentUser() me: AuthPayload, @Body() body: InviteDto = {}) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('Staff account not found.');
     if (user.role === 'OWNER' && me.role !== 'Owner') throw new ForbiddenException('Only an Owner can invite an Owner.');
@@ -140,7 +166,32 @@ export class UsersController {
     if (id === me.sub) throw new BadRequestException('Use Change password in your account menu instead.');
     const invite = newInvite();
     const saved = await this.prisma.user.update({ where: { id }, data: { inviteTokenHash: invite.hash, inviteExpiresAt: invite.expiresAt } });
-    return { ...toApi(saved), inviteToken: invite.token };
+    if (body.sendWhatsApp && !saved.phone) throw new BadRequestException('Add a WhatsApp number for this person first.');
+    const sent = body.sendWhatsApp ? await this.sendInviteMessage(saved, invite.token, body.inviteBaseUrl) : undefined;
+    return { ...toApi(saved), inviteToken: invite.token, ...sent };
+  }
+
+  /** The address invitation links point at: the admin site the request came from, if it is one of ours. */
+  private inviteBase(requested?: string) {
+    const allowed = (this.config.get<string>('CORS_ORIGINS') ?? '').split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
+    const wanted = requested?.trim().replace(/\/$/, '');
+    if (wanted && /^https?:\/\//.test(wanted) && (allowed.length === 0 || allowed.includes(wanted))) return wanted;
+    const admin = allowed.find((o) => o.startsWith('https://') && o.includes('admin'));
+    if (!admin) throw new BadRequestException('Cannot tell which admin site the invitation should open.');
+    return admin;
+  }
+
+  /** Sends the invitation on WhatsApp. The account is created either way; a failure is reported, not thrown. */
+  private async sendInviteMessage(user: User, token: string, base?: string) {
+    const link = `${this.inviteBase(base)}/invite?token=${encodeURIComponent(token)}`;
+    const role = roleEnum.fromDb(user.role);
+    const text = `Hi ${user.name.split(' ')[0]}, you've been added to KeyGo Admin as ${role === 'Owner' ? 'Owner (Super Admin)' : role}.\n\nOpen this link to choose your password and sign in (it works once, for 7 days):\n${link}`;
+    try {
+      const r = await this.whatsapp.sendText(user.phone!, text);
+      return { whatsappSent: true, whatsappTo: r.to };
+    } catch (e) {
+      return { whatsappSent: false, whatsappError: (e as Error).message };
+    }
   }
 
   /** A Driver login must point at an existing driver record, and only one login per driver. */

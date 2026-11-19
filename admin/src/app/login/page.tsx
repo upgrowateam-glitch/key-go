@@ -29,7 +29,8 @@ export default function LoginPage() {
   // Side by side on wide screens; stacked above the card on phones and small tablets
   const wide = width >= 960;
 
-  const emailError = /^\S+@\S+\.\S+$/.test(email.trim()) ? undefined : 'Enter a valid work email';
+  // Staff sign in with their email or the WhatsApp number they were added with
+  const emailError = /^\S+@\S+\.\S+$/.test(email.trim()) || email.replace(/\D/g, '').length >= 10 ? undefined : 'Enter your email or WhatsApp number';
   const passwordError = password ? undefined : 'Enter your password';
 
   const submit = async () => {
@@ -81,12 +82,12 @@ export default function LoginPage() {
           <Text style={styles.subtitle}>For KeyGo owners, administrators and staff.</Text>
 
           <Field
-            label="Work email"
+            label="Email or WhatsApp number"
             required
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
-            placeholder="Enter your work email"
+            placeholder="Email or WhatsApp number"
             left={iconBox(<Mail size={15} color={colors.muted} />)}
             error={tried ? emailError : undefined}
           />

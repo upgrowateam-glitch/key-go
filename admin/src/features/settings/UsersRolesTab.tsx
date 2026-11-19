@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Car, Crown, KeyRound, Link2, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
-import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, EmptyState, Field, FormRow, FormSheet, Grid, StatTile, type Column, type Tone } from '../../components/kit';
+import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, EmptyState, Field, FormRow, FormSheet, Grid, StatTile, ToggleRow, type Column, type Tone } from '../../components/kit';
+import { fetchWhatsApp } from '../../services/whatsapp';
 import { FilterBar, FilterOptions, type ActiveFilter } from '../fleet/FilterBar';
 import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
@@ -52,7 +53,12 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   const [status, setStatus] = useState<StatusFilter>('Any status');
   const [inviting, setInviting] = useState(false);
   /** The invitation link to show after creating a user or making a new link. */
-  const [shareInvite, setShareInvite] = useState<{ user: PortalUser; link: string } | null>(null);
+  const [shareInvite, setShareInvite] = useState<{ user: PortalUser; link: string; note?: string } | null>(null);
+  // Whether KeyGo's WhatsApp number is linked, so invitations can be sent automatically
+  const [waReady, setWaReady] = useState(false);
+  useEffect(() => {
+    fetchWhatsApp().then((w) => setWaReady(w.status === 'connected'), () => setWaReady(false));
+  }, []);
   const [editingRole, setEditingRole] = useState<PortalUser | null>(null);
   const [resetting, setResetting] = useState<PortalUser | null>(null);
   const [toggling, setToggling] = useState<PortalUser | null>(null);
@@ -63,7 +69,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
     [rows, filter, status]
   );
   const list = useListControls(filtered, {
-    search: (u) => `${u.name} ${u.email} ${u.branch}`,
+    search: (u) => `${u.name} ${u.email} ${u.phone} ${u.branch}`,
     sorts: {
       Role: (a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role),
       Name: (a, b) => a.name.localeCompare(b.name),
@@ -77,10 +83,14 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   const ownerOnly = (u: PortalUser) => u.role === 'Owner' && me?.role !== 'Owner';
   const replace = (saved: PortalUser) => setRows(rows.map((u) => (u.id === saved.id ? saved : u)));
   const newLink = async (u: PortalUser) => {
-    const saved = await run(() => sendInvite(u.id), () => 'New invitation link ready. Any earlier link no longer works.');
+    const viaWhatsApp = waReady && !!u.phone;
+    const saved = await run(
+      () => sendInvite(u.id, viaWhatsApp),
+      (x) => (x.whatsappSent ? `New invitation sent on WhatsApp to ${x.whatsappTo}. Any earlier link no longer works.` : 'New invitation link ready. Any earlier link no longer works.')
+    );
     if (saved?.inviteToken) {
       replace(saved);
-      setShareInvite({ user: saved, link: inviteLink(saved.inviteToken) });
+      if (!saved.whatsappSent) setShareInvite({ user: saved, link: inviteLink(saved.inviteToken), note: saved.whatsappError });
     }
   };
 
@@ -129,8 +139,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
               {isSelf(u) ? ' (you)' : ''}
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
-              {u.email}
-              {u.branch ? ` · ${u.branch}` : ''}
+              {[u.email, u.phone, u.branch].filter(Boolean).join(' · ')}
             </Text>
           </View>
         </View>
@@ -217,7 +226,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
                     {isSelf(u) ? ' (you)' : ''}
                   </Text>
                   <Text style={styles.meta} numberOfLines={1}>
-                    {u.email}
+                    {[u.email, u.phone].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
                 {roleCell(u)}
@@ -240,21 +249,38 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
           rows={rows}
           branchNames={branchNames}
           canAddOwner={me?.role === 'Owner'}
+          whatsappReady={waReady}
           onClose={() => setInviting(false)}
           onSave={async (input) => {
             const saved = await run(
               () => createUser(input),
-              (u) => (u.inviteToken ? `${u.name} was added. Send them the invitation link.` : `${u.name} can now sign in as ${u.role}. Share the starting password with them privately.`)
+              (u) =>
+                u.whatsappSent
+                  ? `${u.name} was added. Invitation sent on WhatsApp to ${u.whatsappTo}.`
+                  : u.inviteToken
+                    ? `${u.name} was added. Send them the invitation link.`
+                    : `${u.name} can now sign in as ${u.role}. Share the starting password with them privately.`
             );
             if (saved) {
               setRows([...rows, saved]);
               setInviting(false);
-              if (saved.inviteToken) setShareInvite({ user: saved, link: inviteLink(saved.inviteToken) });
+              // Sent on WhatsApp: nothing more to do. Otherwise show the link to send by hand (with the reason, if WhatsApp failed)
+              if (saved.inviteToken && !saved.whatsappSent) setShareInvite({ user: saved, link: inviteLink(saved.inviteToken), note: saved.whatsappError });
             }
           }}
         />
       ) : null}
-      {shareInvite ? <InviteLinkSheet name={shareInvite.user.name} email={shareInvite.user.email} role={shareInvite.user.role} link={shareInvite.link} onClose={() => setShareInvite(null)} /> : null}
+      {shareInvite ? (
+        <InviteLinkSheet
+          name={shareInvite.user.name}
+          email={shareInvite.user.email}
+          phone={shareInvite.user.phone}
+          role={shareInvite.user.role}
+          link={shareInvite.link}
+          note={shareInvite.note}
+          onClose={() => setShareInvite(null)}
+        />
+      ) : null}
       {editingRole ? (
         <RoleSheet
           user={editingRole}
@@ -368,20 +394,24 @@ function AddUserSheet({
   rows,
   branchNames,
   canAddOwner,
+  whatsappReady,
   onClose,
   onSave,
 }: {
   rows: PortalUser[];
   branchNames: string[];
   canAddOwner: boolean;
+  whatsappReady: boolean;
   onClose: () => void;
-  onSave: (input: { name: string; email: string; role: StaffRole; branch: string; password?: string; driverId?: string }) => void;
+  onSave: (input: { name: string; email?: string; phone?: string; role: StaffRole; branch: string; password?: string; driverId?: string; sendWhatsApp?: boolean }) => void;
 }) {
   const { drivers } = useApp();
   const [driverId, setDriverId] = useState<string | undefined>();
   const styles = useThemedStyles(makeSettingsStyles);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [sendOnWhatsApp, setSendOnWhatsApp] = useState(true);
   const [password, setPassword] = useState('');
   const [access, setAccess] = useState<AccessMethod>('Send an invite link');
   const byInvite = access === 'Send an invite link';
@@ -391,14 +421,41 @@ function AddUserSheet({
   const [touched, setTouched] = useState(false);
 
   const nameError = !name.trim() ? 'Name is required' : undefined;
-  const emailError = !isEmail(email) ? 'Enter a valid email address' : rows.some((u) => u.email.toLowerCase() === email.trim().toLowerCase()) ? 'This email already has a user' : undefined;
+  const digits = phone.replace(/\D/g, '');
+  const phoneKey = digits.length === 10 ? `91${digits}` : digits;
+  const phoneError = !phone.trim()
+    ? undefined
+    : digits.length < 10 || digits.length > 13
+      ? 'Enter a valid WhatsApp number'
+      : rows.some((u) => u.phone.replace(/\D/g, '') === phoneKey)
+        ? 'This number already has a user'
+        : undefined;
+  const emailError = !email.trim()
+    ? !phone.trim()
+      ? 'Enter a WhatsApp number or an email'
+      : undefined
+    : !isEmail(email)
+      ? 'Enter a valid email address'
+      : rows.some((u) => u.email && u.email.toLowerCase() === email.trim().toLowerCase())
+        ? 'This email already has a user'
+        : undefined;
+  const autoSend = byInvite && sendOnWhatsApp && !!phone.trim() && whatsappReady;
   const passwordError = !byInvite && password.length < 8 ? 'Use at least 8 characters' : undefined;
   const driverError = role === 'Driver' && !driverId ? 'Choose the driver this account is for' : undefined;
 
   const submit = () => {
     setTouched(true);
-    if (nameError || emailError || passwordError || driverError) return;
-    onSave({ name: name.trim(), email: email.trim().toLowerCase(), role, branch: branch === NO_BRANCH ? '' : branch, password: byInvite ? undefined : password, driverId: role === 'Driver' ? driverId : undefined });
+    if (nameError || emailError || phoneError || passwordError || driverError) return;
+    onSave({
+      name: name.trim(),
+      email: email.trim().toLowerCase() || undefined,
+      phone: phone.trim() || undefined,
+      role,
+      branch: branch === NO_BRANCH ? '' : branch,
+      password: byInvite ? undefined : password,
+      driverId: role === 'Driver' ? driverId : undefined,
+      sendWhatsApp: autoSend,
+    });
   };
 
   return (
@@ -409,17 +466,27 @@ function AddUserSheet({
       footer={
         <>
           <Button label="Cancel" variant="ghost" onPress={onClose} />
-          <Button label={byInvite ? 'Add and get link' : 'Add user'} onPress={submit} />
+          <Button label={autoSend ? 'Add and send on WhatsApp' : byInvite ? 'Add and get link' : 'Add user'} onPress={submit} />
         </>
       }>
+      <Field label="Full name" required value={name} onChangeText={setName} error={touched ? nameError : undefined} />
       <FormRow>
-        <Field label="Full name" required value={name} onChangeText={setName} error={touched ? nameError : undefined} />
-        <Field label="Email" required value={email} onChangeText={setEmail} keyboardType="email-address" error={touched ? emailError : undefined} />
+        <Field label="WhatsApp number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="+91 98765 43210" error={touched ? phoneError : undefined} hint="They can sign in with this number." />
+        <Field label="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" placeholder="name@example.com" error={touched ? emailError : undefined} />
       </FormRow>
       <Text style={styles.label}>How will they get in?</Text>
       <ChipGroup options={ACCESS_METHODS} value={access} onChange={setAccess} />
       {byInvite ? (
-        <Text style={[styles.meta, { marginTop: 8, marginBottom: 12 }]}>You get a one-time link to send them on WhatsApp or email. They open it and choose their own password. The link works for 7 days.</Text>
+        <View style={{ marginTop: 8, marginBottom: 12 }}>
+          <Text style={styles.meta}>They get a one-time link, open it and choose their own password. The link works for 7 days.</Text>
+          {phone.trim() ? (
+            whatsappReady ? (
+              <ToggleRow label="Send the link on WhatsApp now" description="Sent automatically from KeyGo's WhatsApp number." value={sendOnWhatsApp} onValueChange={setSendOnWhatsApp} />
+            ) : (
+              <Text style={[styles.meta, { marginTop: 6 }]}>KeyGo's WhatsApp isn't connected, so you'll get the link to send yourself. Connect it in System → WhatsApp & SMS to send automatically.</Text>
+            )
+          ) : null}
+        </View>
       ) : (
         <View style={{ marginTop: 10 }}>
           <Field label="Starting password" required secureTextEntry value={password} onChangeText={setPassword} error={touched ? passwordError : undefined} hint="Share it with them privately. They can change it later from their account menu." />

@@ -87,7 +87,7 @@ export async function refreshSession(): Promise<StaffSession> {
 }
 
 /** Who an invitation link is for. */
-export const fetchInvite = (token: string) => api<{ name: string; email: string; role: StaffRole }>(`/auth/invite/${encodeURIComponent(token)}`, { auth: false });
+export const fetchInvite = (token: string) => api<{ name: string; email: string; phone?: string; role: StaffRole }>(`/auth/invite/${encodeURIComponent(token)}`, { auth: false });
 
 /** Sets the password from an invitation and signs the person in. */
 export async function acceptInvite(token: string, password: string): Promise<StaffSession> {

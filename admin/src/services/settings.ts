@@ -43,7 +43,10 @@ export const branchesStore = createStore<Branch[]>('settings.branches', []);
 export interface PortalUser {
   id: string;
   name: string;
+  /** Empty when the person was added with only a WhatsApp number. */
   email: string;
+  /** WhatsApp number, e.g. +919876543210 (empty if none). */
+  phone: string;
   role: StaffRole;
   branch: string;
   /** Driver accounts: the driver record they belong to. */
@@ -55,18 +58,23 @@ export interface PortalUser {
   inviteExpiresAt?: string | null;
   /** Returned only when an invitation is created: the secret part of the link. */
   inviteToken?: string;
+  /** Set when the invitation was sent on WhatsApp just now. */
+  whatsappSent?: boolean;
+  whatsappTo?: string;
+  whatsappError?: string;
 }
 
 /** Staff accounts live in the users table on the server, so they can sign in. Owners and Admins manage them. */
 export const fetchUsers = () => api<PortalUser[]>('/admin/users');
 /** Without a password the server creates an invitation link instead (returned once as inviteToken). */
-export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password?: string; driverId?: string }) =>
-  api<PortalUser>('/admin/users', { method: 'POST', body: input });
-export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active'>> & { password?: string; driverId?: string }) =>
+export const createUser = (input: { name: string; email?: string; phone?: string; role: StaffRole; branch: string; password?: string; driverId?: string; sendWhatsApp?: boolean }) =>
+  api<PortalUser>('/admin/users', { method: 'POST', body: { ...input, inviteBaseUrl: window.location.origin } });
+export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active' | 'phone'>> & { password?: string; driverId?: string }) =>
   api<PortalUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
 
 /** A new one-time invitation link for this person; any earlier link stops working. */
-export const sendInvite = (id: string) => api<PortalUser>(`/admin/users/${encodeURIComponent(id)}/invite`, { method: 'POST' });
+export const sendInvite = (id: string, sendWhatsApp = false) =>
+  api<PortalUser>(`/admin/users/${encodeURIComponent(id)}/invite`, { method: 'POST', body: { sendWhatsApp, inviteBaseUrl: window.location.origin } });
 
 /** The link a person opens to accept their invitation. */
 export const inviteLink = (token: string) => `${typeof window === 'undefined' ? '' : window.location.origin}/invite?token=${encodeURIComponent(token)}`;

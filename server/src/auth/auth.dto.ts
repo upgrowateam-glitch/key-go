@@ -9,6 +9,18 @@ export class LoginDto {
   password: string;
 }
 
+/** Staff sign in with their email or their WhatsApp number. */
+export class StaffLoginDto {
+  @IsString()
+  @MinLength(3, { message: 'Enter your email or WhatsApp number.' })
+  @MaxLength(120)
+  email: string;
+
+  @IsString()
+  @MinLength(1, { message: 'Enter your password.' })
+  password: string;
+}
+
 export class RegisterCustomerDto {
   @IsString()
   @MinLength(1, { message: 'Enter your first name.' })

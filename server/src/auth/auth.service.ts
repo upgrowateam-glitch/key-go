@@ -7,6 +7,7 @@ import { customerToApi, normaliseEmail, normalisePhone } from '../domain/mappers
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from './auth.decorators';
 import type { RegisterCustomerDto } from './auth.dto';
+import { whatsappDigits } from '../whatsapp/whatsapp.service';
 import { hashInvite } from './invites';
 import { permissionsFor } from './permissions';
 
@@ -33,9 +34,9 @@ export class AuthService {
     return this.jwt.signAsync({ sub: payload.sub, kind: payload.kind, role: payload.role, name: payload.name, ver: payload.ver ?? 0 });
   }
 
-  staffSession(user: { id: string; name: string; email: string; role: Parameters<typeof roleEnum.fromDb>[0]; driverId?: string | null }) {
+  staffSession(user: { id: string; name: string; email: string | null; role: Parameters<typeof roleEnum.fromDb>[0]; driverId?: string | null }) {
     const role = roleEnum.fromDb(user.role);
-    return { id: user.id, name: user.name, email: user.email, role, driverId: user.driverId ?? null, permissions: permissionsFor(role) };
+    return { id: user.id, name: user.name, email: user.email ?? '', role, driverId: user.driverId ?? null, permissions: permissionsFor(role) };
   }
 
   // ---------------------------------------------------------------- wrong-password protection
@@ -80,7 +81,10 @@ export class AuthService {
 
   async staffLogin(email: string, password: string, ip?: string) {
     this.checkIp(ip);
-    const user = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    const id = email.trim();
+    const user = id.includes('@')
+      ? await this.prisma.user.findUnique({ where: { email: id.toLowerCase() } })
+      : await this.prisma.user.findUnique({ where: { phone: whatsappDigits(id) } });
     if (!(await this.verifyPassword(user, password, 'user')) || !user || !user.active) throw new UnauthorizedException(BAD_LOGIN);
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const session = this.staffSession(user);
@@ -100,7 +104,7 @@ export class AuthService {
   async describeInvite(token: string, ip?: string) {
     this.checkIp(ip);
     const user = await this.openInvite(token);
-    return { name: user.name, email: user.email, role: roleEnum.fromDb(user.role) };
+    return { name: user.name, email: user.email ?? '', phone: user.phone ? `+${user.phone}` : '', role: roleEnum.fromDb(user.role) };
   }
 
   /** Sets the person's password from their invitation and signs them in. The link then stops working. */

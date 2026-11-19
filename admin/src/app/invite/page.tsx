@@ -21,7 +21,7 @@ function InviteCard() {
   const token = useSearchParams().get('token') ?? '';
   const { width } = useResponsive();
   const { refresh } = useStaffSession();
-  const [invite, setInvite] = useState<{ name: string; email: string; role: StaffRole } | null>(null);
+  const [invite, setInvite] = useState<{ name: string; email: string; phone?: string; role: StaffRole } | null>(null);
   const [loadError, setLoadError] = useState('');
   const [password, setPassword] = useState('');
   const [again, setAgain] = useState('');
@@ -86,7 +86,7 @@ function InviteCard() {
           <Text style={styles.subtitle}>
             You were invited as <Text style={{ fontWeight: '800', color: colors.txt }}>{invite.role === 'Owner' ? 'Owner (Super Admin)' : invite.role}</Text>. Choose a password to finish setting up your account.
           </Text>
-          <Field label="Email" value={invite.email} editable={false} hint="You will sign in with this email." />
+          <Field label={invite.email ? 'Email' : 'WhatsApp number'} value={invite.email || invite.phone || ''} editable={false} hint={invite.email && invite.phone ? `You can sign in with this email or ${invite.phone}.` : 'You will sign in with this.'} />
           <Field label="New password" required secureTextEntry={!show} value={password} onChangeText={setPassword} left={<LockKeyhole size={15} color={colors.muted} />} right={eye} error={tried ? passwordError : undefined} hint="At least 8 characters." />
           <Field label="New password again" required secureTextEntry={!show} value={again} onChangeText={setAgain} left={<LockKeyhole size={15} color={colors.muted} />} error={tried ? againError : undefined} />
           {error ? <Text style={styles.error}>{error}</Text> : null}

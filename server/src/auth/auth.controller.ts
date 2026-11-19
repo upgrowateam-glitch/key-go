@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, SignedIn, StaffOnly, type AuthPayload } from './auth.decorators';
-import { AcceptInviteDto, ChangePasswordDto, LoginDto, RegisterCustomerDto } from './auth.dto';
+import { AcceptInviteDto, ChangePasswordDto, LoginDto, RegisterCustomerDto, StaffLoginDto } from './auth.dto';
 import { AuthService } from './auth.service';
 import { AREA_LABELS, AREAS, ROLE_PERMISSIONS } from './permissions';
 
@@ -18,7 +18,7 @@ export class AuthController {
   @Post('staff/login')
   @HttpCode(200)
   @ApiOperation({ summary: 'Admin portal sign-in; returns a token and the staff member with their role and permissions' })
-  staffLogin(@Body() body: LoginDto, @Req() req: Request) {
+  staffLogin(@Body() body: StaffLoginDto, @Req() req: Request) {
     return this.auth.staffLogin(body.email, body.password, req.ip);
   }
 
