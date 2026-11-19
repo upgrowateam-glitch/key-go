@@ -50,14 +50,26 @@ export interface PortalUser {
   driverId?: string | null;
   active: boolean;
   lastActive: string;
+  /** Waiting for the person to open their invitation link and set a password. */
+  invitePending?: boolean;
+  inviteExpiresAt?: string | null;
+  /** Returned only when an invitation is created: the secret part of the link. */
+  inviteToken?: string;
 }
 
 /** Staff accounts live in the users table on the server, so they can sign in. Owners and Admins manage them. */
 export const fetchUsers = () => api<PortalUser[]>('/admin/users');
-export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password: string; driverId?: string }) =>
+/** Without a password the server creates an invitation link instead (returned once as inviteToken). */
+export const createUser = (input: { name: string; email: string; role: StaffRole; branch: string; password?: string; driverId?: string }) =>
   api<PortalUser>('/admin/users', { method: 'POST', body: input });
 export const updateUser = (id: string, patch: Partial<Pick<PortalUser, 'name' | 'role' | 'branch' | 'active'>> & { password?: string; driverId?: string }) =>
   api<PortalUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
+
+/** A new one-time invitation link for this person; any earlier link stops working. */
+export const sendInvite = (id: string) => api<PortalUser>(`/admin/users/${encodeURIComponent(id)}/invite`, { method: 'POST' });
+
+/** The link a person opens to accept their invitation. */
+export const inviteLink = (token: string) => `${typeof window === 'undefined' ? '' : window.location.origin}/invite?token=${encodeURIComponent(token)}`;
 
 export interface PricingSettings {
   termDiscount: Record<RentalTerm, number>;

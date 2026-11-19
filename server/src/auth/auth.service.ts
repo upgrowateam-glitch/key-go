@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, GoneException, HttpException, HttpStatus, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcryptjs';
 import { dateOnly } from '../common/dates';
@@ -7,6 +7,7 @@ import { customerToApi, normaliseEmail, normalisePhone } from '../domain/mappers
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthPayload } from './auth.decorators';
 import type { RegisterCustomerDto } from './auth.dto';
+import { hashInvite } from './invites';
 import { permissionsFor } from './permissions';
 
 const BAD_LOGIN = 'Incorrect email or password.';
@@ -84,6 +85,42 @@ export class AuthService {
     await this.prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
     const session = this.staffSession(user);
     return { token: await this.sign({ sub: user.id, kind: 'staff', role: session.role, name: user.name, ver: user.tokenVersion }), user: session };
+  }
+
+  // ---------------------------------------------------------------- invitations
+
+  private async openInvite(token: string) {
+    const user = token ? await this.prisma.user.findUnique({ where: { inviteTokenHash: hashInvite(token) } }) : null;
+    if (!user || !user.active) throw new NotFoundException('This invitation link is not valid. Ask for a new one.');
+    if (!user.inviteExpiresAt || user.inviteExpiresAt < new Date()) throw new GoneException('This invitation link has expired. Ask your Owner or Admin for a new one.');
+    return user;
+  }
+
+  /** Who an invitation is for, so the page can greet them. */
+  async describeInvite(token: string, ip?: string) {
+    this.checkIp(ip);
+    const user = await this.openInvite(token);
+    return { name: user.name, email: user.email, role: roleEnum.fromDb(user.role) };
+  }
+
+  /** Sets the person's password from their invitation and signs them in. The link then stops working. */
+  async acceptInvite(token: string, password: string, ip?: string) {
+    this.checkIp(ip);
+    const user = await this.openInvite(token);
+    const saved = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await hash(password, 10),
+        inviteTokenHash: null,
+        inviteExpiresAt: null,
+        tokenVersion: { increment: 1 },
+        failedLogins: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
+    const session = this.staffSession(saved);
+    return { token: await this.sign({ sub: saved.id, kind: 'staff', role: session.role, name: saved.name, ver: saved.tokenVersion }), user: session };
   }
 
   // ---------------------------------------------------------------- customers

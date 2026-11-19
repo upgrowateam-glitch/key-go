@@ -4,6 +4,7 @@ import type { User } from '@prisma/client';
 import { hash } from 'bcryptjs';
 import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { CurrentUser, StaffOnly, type AuthPayload } from '../auth/auth.decorators';
+import { newInvite, unusablePassword } from '../auth/invites';
 import { roleEnum, type StaffRoleLabel } from '../common/enums';
 import { StoreService } from '../domain/store.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -17,7 +18,8 @@ class CreateUserDto {
   @IsOptional() @IsString() @MaxLength(80) branch?: string;
   /** Driver accounts: the driver record this login belongs to. */
   @IsOptional() @IsString() @MaxLength(80) driverId?: string;
-  @IsString() @MinLength(8, { message: 'Use at least 8 characters for the password.' }) password: string;
+  /** Leave out to send an invitation link instead; the person then sets their own password. */
+  @IsOptional() @IsString() @MinLength(8, { message: 'Use at least 8 characters for the password.' }) password?: string;
 }
 
 class UpdateUserDto {
@@ -44,6 +46,9 @@ const toApi = (u: User) => ({
   driverId: u.driverId ?? null,
   active: u.active,
   lastActive: lastActive(u.lastLoginAt),
+  /** Waiting for the person to open their invitation link and set a password. */
+  invitePending: !!u.inviteTokenHash,
+  inviteExpiresAt: u.inviteExpiresAt?.toISOString() ?? null,
 });
 
 /** Staff accounts that can sign in to the admin portal. Owners and Admins manage them; only Owners manage Owners. */
@@ -64,16 +69,27 @@ export class UsersController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create a staff account with a starting password' })
+  @ApiOperation({ summary: 'Create a staff account, with a starting password or (no password) a one-time invitation link' })
   async create(@Body() body: CreateUserDto, @CurrentUser() me: AuthPayload) {
     if (body.role === 'Owner' && me.role !== 'Owner') throw new ForbiddenException('Only an Owner can create another Owner.');
     const email = body.email.trim().toLowerCase();
     if (await this.prisma.user.count({ where: { email } })) throw new ConflictException('A staff account with this email already exists.');
     const driverId = await this.checkDriver(body.role, body.driverId);
+    const invite = body.password ? null : newInvite();
     const user = await this.prisma.user.create({
-      data: { name: body.name.trim(), email, role: roleEnum.toDb(body.role), branchName: body.branch?.trim() || null, driverId, passwordHash: await hash(body.password, 10) },
+      data: {
+        name: body.name.trim(),
+        email,
+        role: roleEnum.toDb(body.role),
+        branchName: body.branch?.trim() || null,
+        driverId,
+        passwordHash: await hash(body.password ?? unusablePassword(), 10),
+        inviteTokenHash: invite?.hash,
+        inviteExpiresAt: invite?.expiresAt,
+      },
     });
-    return toApi(user);
+    // The invitation token is returned only here; the server keeps just its hash
+    return { ...toApi(user), inviteToken: invite?.token };
   }
 
   @Patch(':id')
@@ -106,9 +122,25 @@ export class UsersController {
         tokenVersion: signOut ? { increment: 1 } : undefined,
         failedLogins: body.password ? 0 : undefined,
         lockedUntil: body.password ? null : undefined,
+        // Setting a password by hand replaces any open invitation
+        inviteTokenHash: body.password ? null : undefined,
+        inviteExpiresAt: body.password ? null : undefined,
       },
     });
     return toApi(saved);
+  }
+
+  @Post(':id/invite')
+  @ApiOperation({ summary: 'Make a new invitation link (the old one stops working); the person sets a new password with it' })
+  async invite(@Param('id') id: string, @CurrentUser() me: AuthPayload) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('Staff account not found.');
+    if (user.role === 'OWNER' && me.role !== 'Owner') throw new ForbiddenException('Only an Owner can invite an Owner.');
+    if (!user.active) throw new BadRequestException('Enable this account before sending an invitation.');
+    if (id === me.sub) throw new BadRequestException('Use Change password in your account menu instead.');
+    const invite = newInvite();
+    const saved = await this.prisma.user.update({ where: { id }, data: { inviteTokenHash: invite.hash, inviteExpiresAt: invite.expiresAt } });
+    return { ...toApi(saved), inviteToken: invite.token };
   }
 
   /** A Driver login must point at an existing driver record, and only one login per driver. */

@@ -135,6 +135,9 @@ model User {
   /// Wrong passwords in a row; the account pauses sign-in for a while after too many.
   failedLogins Int       @default(0) @map("failed_logins")
   lockedUntil  DateTime? @map("locked_until")
+  /// Invitation link (only its SHA-256 hash is kept) for a person who has not set their password yet.
+  inviteTokenHash String?   @unique @map("invite_token_hash")
+  inviteExpiresAt DateTime? @map("invite_expires_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 

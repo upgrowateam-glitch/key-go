@@ -86,6 +86,17 @@ export async function refreshSession(): Promise<StaffSession> {
   return user;
 }
 
+/** Who an invitation link is for. */
+export const fetchInvite = (token: string) => api<{ name: string; email: string; role: StaffRole }>(`/auth/invite/${encodeURIComponent(token)}`, { auth: false });
+
+/** Sets the password from an invitation and signs the person in. */
+export async function acceptInvite(token: string, password: string): Promise<StaffSession> {
+  const { token: session, user } = await api<{ token: string; user: StaffSession }>(`/auth/invite/${encodeURIComponent(token)}`, { method: 'POST', body: { password }, auth: false });
+  storeToken(session);
+  storeSession(user);
+  return user;
+}
+
 /** Changes the signed-in person's password; other devices are signed out, this one keeps working. */
 export async function changePassword(currentPassword: string, newPassword: string) {
   const { token } = await api<{ token: string }>('/auth/password', { method: 'POST', body: { currentPassword, newPassword } });

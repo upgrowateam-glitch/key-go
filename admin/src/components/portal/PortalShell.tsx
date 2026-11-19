@@ -363,12 +363,14 @@ function Workspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [session, setSession] = useState<StaffSession | null>(() => readSession());
   const isLogin = pathname === '/login';
+  // Invitation links open without a session (and replace any session once accepted)
+  const isPublic = isLogin || pathname === '/invite';
   const refresh = () => setSession(readSession());
 
   useEffect(() => {
-    if (!session && !isLogin) router.replace('/login');
+    if (!session && !isPublic) router.replace('/login');
     if (session && isLogin) router.replace('/dashboard');
-  }, [session, isLogin, router]);
+  }, [session, isLogin, isPublic, router]);
 
   // An expired or revoked session sends the user back to sign in
   useEffect(() => {
@@ -387,7 +389,7 @@ function Workspace({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext.Provider value={{ session, refresh }}>
-      {isLogin ? (
+      {isPublic ? (
         children
       ) : !session ? null : !session.permissions ? (
         // A session saved before permissions existed: wait for the server's copy

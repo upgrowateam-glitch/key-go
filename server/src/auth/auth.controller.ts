@@ -1,9 +1,9 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrentUser, SignedIn, StaffOnly, type AuthPayload } from './auth.decorators';
-import { ChangePasswordDto, LoginDto, RegisterCustomerDto } from './auth.dto';
+import { AcceptInviteDto, ChangePasswordDto, LoginDto, RegisterCustomerDto } from './auth.dto';
 import { AuthService } from './auth.service';
 import { AREA_LABELS, AREAS, ROLE_PERMISSIONS } from './permissions';
 
@@ -38,6 +38,19 @@ export class AuthController {
   @ApiOperation({ summary: 'What every role can view or change, for the Settings → Permissions page' })
   permissions() {
     return { areas: AREAS.map((id) => ({ id, label: AREA_LABELS[id] })), roles: ROLE_PERMISSIONS };
+  }
+
+  @Get('invite/:token')
+  @ApiOperation({ summary: 'Who an invitation link is for (404 if invalid, 410 if expired)' })
+  invite(@Param('token') token: string, @Req() req: Request) {
+    return this.auth.describeInvite(token, req.ip);
+  }
+
+  @Post('invite/:token')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Accept an invitation: set a password and sign in to the admin portal' })
+  acceptInvite(@Param('token') token: string, @Body() body: AcceptInviteDto, @Req() req: Request) {
+    return this.auth.acceptInvite(token, body.password, req.ip);
   }
 
   @Post('customer/register')

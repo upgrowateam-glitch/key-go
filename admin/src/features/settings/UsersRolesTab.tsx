@@ -1,15 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Car, Crown, KeyRound, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
+import { Car, Crown, KeyRound, Link2, ShieldCheck, UserCog, UserPlus, Users } from 'lucide-react-native';
 import { Avatar, Badge, Button, Card, ChipGroup, ConfirmDialog, DataTable, EmptyState, Field, FormRow, FormSheet, Grid, StatTile, type Column, type Tone } from '../../components/kit';
+import { FilterBar, FilterOptions, type ActiveFilter } from '../fleet/FilterBar';
 import { ResourceState } from '../../components/portal/ResourceState';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useThemeColors, useThemedStyles } from '../../theme';
-import { branchesStore, createUser, fetchUsers, updateUser, type PortalUser } from '../../services/settings';
+import { branchesStore, createUser, fetchUsers, inviteLink, sendInvite, updateUser, type PortalUser } from '../../services/settings';
+import { InviteLinkSheet } from './InviteLinkSheet';
 import { readSession, type StaffRole } from '../../services/auth';
 import { useResource } from '../../services/mockClient';
-import { ListToolbar, Pager, useListControls, WithStore } from '../notifications/listControls';
+import { Pager, useListControls, WithStore } from '../notifications/listControls';
 import { isEmail, makeSettingsStyles } from './formParts';
 
 export const ROLES: StaffRole[] = ['Owner', 'Admin', 'Manager', 'Staff', 'Driver'];
@@ -17,9 +19,22 @@ export const ROLE_TONE: Record<StaffRole, Tone> = { Owner: 'highlight', Admin: '
 /** Owner is the Super Admin. */
 const roleLabel = (r: StaffRole) => (r === 'Owner' ? 'Owner (Super Admin)' : r);
 const roleLabels = (roles: StaffRole[]) => Object.fromEntries(roles.map((r) => [r, roleLabel(r)])) as Record<StaffRole, string>;
-const ROLE_FILTERS = ['All', ...ROLES] as const;
+const ROLE_FILTERS = ['All roles', ...ROLES] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
+const STATUS_FILTERS = ['Any status', 'Active', 'Disabled'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+const SORTS = ['Role', 'Name', 'Branch'] as const;
+type SortName = (typeof SORTS)[number];
 const NO_BRANCH = 'No branch';
+const ACCESS_METHODS = ['Send an invite link', 'Set a password now'] as const;
+type AccessMethod = (typeof ACCESS_METHODS)[number];
+
+/** "Invite expires 25 Nov" or "Invite expired" for people who have not joined yet. */
+function inviteHint(u: PortalUser) {
+  if (!u.inviteExpiresAt) return 'Invite pending';
+  const at = new Date(u.inviteExpiresAt);
+  return at < new Date() ? 'Invite expired, send a new link' : `Invite expires ${at.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
+}
 
 /** Staff accounts that can sign in to this portal. Only Owners and Admins can open this tab. */
 export default function UsersRolesTab() {
@@ -32,15 +47,21 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   const { showToast, drivers } = useApp();
   const driverName = (id?: string | null) => drivers.find((d) => d.id === id)?.name;
   const styles = useThemedStyles(makeSettingsStyles);
-  const { cols } = useResponsive();
-  const [filter, setFilter] = useState<RoleFilter>('All');
+  const { cols, isDesktop } = useResponsive();
+  const [filter, setFilter] = useState<RoleFilter>('All roles');
+  const [status, setStatus] = useState<StatusFilter>('Any status');
   const [inviting, setInviting] = useState(false);
+  /** The invitation link to show after creating a user or making a new link. */
+  const [shareInvite, setShareInvite] = useState<{ user: PortalUser; link: string } | null>(null);
   const [editingRole, setEditingRole] = useState<PortalUser | null>(null);
   const [resetting, setResetting] = useState<PortalUser | null>(null);
   const [toggling, setToggling] = useState<PortalUser | null>(null);
   const me = useMemo(() => readSession(), []);
 
-  const filtered = useMemo(() => rows.filter((u) => filter === 'All' || u.role === filter), [rows, filter]);
+  const filtered = useMemo(
+    () => rows.filter((u) => (filter === 'All roles' || u.role === filter) && (status === 'Any status' || (status === 'Active') === u.active)),
+    [rows, filter, status]
+  );
   const list = useListControls(filtered, {
     search: (u) => `${u.name} ${u.email} ${u.branch}`,
     sorts: {
@@ -55,6 +76,13 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
   const isSelf = (u: PortalUser) => u.id === me?.id;
   const ownerOnly = (u: PortalUser) => u.role === 'Owner' && me?.role !== 'Owner';
   const replace = (saved: PortalUser) => setRows(rows.map((u) => (u.id === saved.id ? saved : u)));
+  const newLink = async (u: PortalUser) => {
+    const saved = await run(() => sendInvite(u.id), () => 'New invitation link ready. Any earlier link no longer works.');
+    if (saved?.inviteToken) {
+      replace(saved);
+      setShareInvite({ user: saved, link: inviteLink(saved.inviteToken) });
+    }
+  };
 
   const run = async (task: () => Promise<PortalUser>, done: (saved: PortalUser) => string) => {
     try {
@@ -67,6 +95,25 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
     }
   };
 
+  const actions = (u: PortalUser) => (
+    <View style={{ flexDirection: 'row', flexWrap: isDesktop ? 'nowrap' : 'wrap', gap: 6, justifyContent: isDesktop ? 'flex-end' : 'flex-start' }}>
+      <Button label="Change role" size="sm" variant="outline" disabled={isLastOwner(u) || ownerOnly(u)} onPress={() => setEditingRole(u)} />
+      {u.invitePending ? (
+        <Button label="Invite link" size="sm" variant="outline" disabled={ownerOnly(u) || !u.active} icon={(c) => <Link2 size={13} color={c} />} onPress={() => newLink(u)} />
+      ) : (
+        <Button label="Reset password" size="sm" variant="outline" disabled={ownerOnly(u)} icon={(c) => <KeyRound size={13} color={c} />} onPress={() => setResetting(u)} />
+      )}
+      <Button label={u.active ? 'Disable' : 'Enable'} size="sm" variant={u.active ? 'danger' : 'secondary'} disabled={isLastOwner(u) || isSelf(u) || ownerOnly(u)} onPress={() => setToggling(u)} />
+    </View>
+  );
+  const roleCell = (u: PortalUser) => (
+    <View style={{ gap: 2, alignItems: 'flex-start' }}>
+      <Badge label={u.role} tone={ROLE_TONE[u.role]} />
+      {u.role === 'Driver' ? <Text style={styles.meta}>{driverName(u.driverId) ?? 'Driver record missing'}</Text> : null}
+    </View>
+  );
+
+  // Desktop: one compact row per user; branch and last sign-in sit under the name and status
   const columns: Column<PortalUser>[] = [
     {
       key: 'name',
@@ -83,6 +130,7 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
             </Text>
             <Text style={styles.meta} numberOfLines={1}>
               {u.email}
+              {u.branch ? ` · ${u.branch}` : ''}
             </Text>
           </View>
         </View>
@@ -92,51 +140,99 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
       key: 'role',
       label: 'Role',
       minWidth: 110,
-      render: (u) => (
-        <View style={{ gap: 2 }}>
-          <Badge label={u.role} tone={ROLE_TONE[u.role]} />
-          {u.role === 'Driver' ? <Text style={styles.meta}>{driverName(u.driverId) ?? 'Driver record missing'}</Text> : null}
-        </View>
-      ),
+      render: roleCell,
     },
-    { key: 'branch', label: 'Branch', flex: 1.2, minWidth: 150, render: (u) => <Text style={styles.meta}>{u.branch || '—'}</Text> },
-    { key: 'status', label: 'Status', minWidth: 90, render: (u) => <Badge label={u.active ? 'Active' : 'Disabled'} tone={u.active ? 'success' : 'neutral'} /> },
-    { key: 'lastActive', label: 'Last sign-in', minWidth: 100 },
     {
-      key: 'actions',
-      label: 'Actions',
-      minWidth: 300,
-      align: 'right',
+      key: 'status',
+      label: 'Status',
+      minWidth: 120,
       render: (u) => (
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <Button label="Change role" size="sm" variant="outline" disabled={isLastOwner(u) || ownerOnly(u)} onPress={() => setEditingRole(u)} />
-          <Button label="Reset password" size="sm" variant="outline" disabled={ownerOnly(u)} icon={(c) => <KeyRound size={13} color={c} />} onPress={() => setResetting(u)} />
-          <Button label={u.active ? 'Disable' : 'Enable'} size="sm" variant={u.active ? 'danger' : 'secondary'} disabled={isLastOwner(u) || isSelf(u) || ownerOnly(u)} onPress={() => setToggling(u)} />
+        <View style={{ gap: 2, alignItems: 'flex-start' }}>
+          <Badge label={!u.active ? 'Disabled' : u.invitePending ? 'Invite pending' : 'Active'} tone={!u.active ? 'neutral' : u.invitePending ? 'warning' : 'success'} />
+          <Text style={styles.meta}>{u.invitePending ? inviteHint(u) : `Signed in: ${u.lastActive}`}</Text>
         </View>
       ),
     },
+    { key: 'actions', label: 'Actions', flex: 2.4, minWidth: 380, align: 'right', render: actions },
   ];
+
+  const activeFilters: ActiveFilter[] = [
+    ...(filter !== 'All roles' ? [{ key: 'role', label: `Role: ${filter}`, onClear: () => setFilter('All roles') }] : []),
+    ...(status !== 'Any status' ? [{ key: 'status', label: `Status: ${status}`, onClear: () => setStatus('Any status') }] : []),
+  ];
+  const empty = <EmptyState title="No users" message="Nobody matches this search or filter." compact />;
 
   return (
     <View>
       <Text style={styles.meta}>Each person signs in with their own email and password. Roles decide which sections they can open, and the server enforces it.</Text>
-      <Grid cols={cols(2, 5, 5)} style={{ marginTop: 8 }}>
+      <Grid cols={cols(2, 3, 5)} style={{ marginTop: 12 }}>
         <StatTile label="Owners" value={rows.filter((u) => u.role === 'Owner').length} tone="highlight" icon={(c) => <Crown size={16} color={c} />} />
         <StatTile label="Admins" value={rows.filter((u) => u.role === 'Admin').length} tone="primary" icon={(c) => <ShieldCheck size={16} color={c} />} />
         <StatTile label="Managers" value={rows.filter((u) => u.role === 'Manager').length} tone="info" icon={(c) => <UserCog size={16} color={c} />} />
         <StatTile label="Staff" value={rows.filter((u) => u.role === 'Staff').length} tone="neutral" icon={(c) => <Users size={16} color={c} />} />
         <StatTile label="Drivers" value={rows.filter((u) => u.role === 'Driver').length} tone="violet" icon={(c) => <Car size={16} color={c} />} />
       </Grid>
-      <View style={[styles.toolbar, { marginTop: 16 }]}>
+      <View style={[styles.toolbar, { marginTop: 20, marginBottom: 12 }]}>
         <Text style={styles.meta}>
           {list.total} of {rows.length} users shown
         </Text>
         <Button label="Add user" size="sm" icon={(c) => <UserPlus size={14} color={c} />} onPress={() => setInviting(true)} />
       </View>
-      <ListToolbar controls={list} placeholder="Search name, email or branch" filters={<ChipGroup options={ROLE_FILTERS} value={filter} onChange={setFilter} />} />
-      <Card padded={false}>
-        <DataTable columns={columns} rows={list.pageRows} rowKey={(u) => u.id} empty={<EmptyState title="No users" message="Nobody matches this search or role." compact />} />
-      </Card>
+      <View style={{ zIndex: 20, marginBottom: 14 }}>
+        <FilterBar
+          query={list.query}
+          onQuery={list.setQuery}
+          placeholder="Search name, email or branch"
+          active={activeFilters}
+          onClearAll={() => {
+            setFilter('All roles');
+            setStatus('Any status');
+          }}
+          sortOptions={SORTS}
+          sort={list.sort as SortName}
+          onSort={list.setSort}
+          panel={
+            <>
+              <FilterOptions label="Role" options={ROLE_FILTERS} value={filter} onChange={setFilter} />
+              <FilterOptions label="Status" options={STATUS_FILTERS} value={status} onChange={setStatus} />
+            </>
+          }
+        />
+      </View>
+      {isDesktop ? (
+        <Card padded={false}>
+          <DataTable columns={columns} rows={list.pageRows} rowKey={(u) => u.id} empty={empty} />
+        </Card>
+      ) : list.pageRows.length === 0 ? (
+        <Card>{empty}</Card>
+      ) : (
+        <View style={{ gap: 10 }}>
+          {list.pageRows.map((u) => (
+            <Card key={u.id}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Avatar name={u.name} size={36} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.title} numberOfLines={1}>
+                    {u.name}
+                    {isSelf(u) ? ' (you)' : ''}
+                  </Text>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {u.email}
+                  </Text>
+                </View>
+                {roleCell(u)}
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <Badge label={!u.active ? 'Disabled' : u.invitePending ? 'Invite pending' : 'Active'} tone={!u.active ? 'neutral' : u.invitePending ? 'warning' : 'success'} />
+                <Text style={styles.meta}>
+                  {u.branch || 'No branch'} · {u.invitePending ? inviteHint(u) : `signed in: ${u.lastActive}`}
+                </Text>
+              </View>
+              <View style={{ marginTop: 12 }}>{actions(u)}</View>
+            </Card>
+          ))}
+        </View>
+      )}
       <Pager controls={list} />
 
       {inviting ? (
@@ -146,14 +242,19 @@ function UsersList({ rows, setRows, branchNames }: { rows: PortalUser[]; setRows
           canAddOwner={me?.role === 'Owner'}
           onClose={() => setInviting(false)}
           onSave={async (input) => {
-            const saved = await run(() => createUser(input), (u) => `${u.name} can now sign in as ${u.role}. Share the starting password with them privately.`);
+            const saved = await run(
+              () => createUser(input),
+              (u) => (u.inviteToken ? `${u.name} was added. Send them the invitation link.` : `${u.name} can now sign in as ${u.role}. Share the starting password with them privately.`)
+            );
             if (saved) {
               setRows([...rows, saved]);
               setInviting(false);
+              if (saved.inviteToken) setShareInvite({ user: saved, link: inviteLink(saved.inviteToken) });
             }
           }}
         />
       ) : null}
+      {shareInvite ? <InviteLinkSheet name={shareInvite.user.name} email={shareInvite.user.email} role={shareInvite.user.role} link={shareInvite.link} onClose={() => setShareInvite(null)} /> : null}
       {editingRole ? (
         <RoleSheet
           user={editingRole}
@@ -274,7 +375,7 @@ function AddUserSheet({
   branchNames: string[];
   canAddOwner: boolean;
   onClose: () => void;
-  onSave: (input: { name: string; email: string; role: StaffRole; branch: string; password: string; driverId?: string }) => void;
+  onSave: (input: { name: string; email: string; role: StaffRole; branch: string; password?: string; driverId?: string }) => void;
 }) {
   const { drivers } = useApp();
   const [driverId, setDriverId] = useState<string | undefined>();
@@ -282,6 +383,8 @@ function AddUserSheet({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [access, setAccess] = useState<AccessMethod>('Send an invite link');
+  const byInvite = access === 'Send an invite link';
   const [role, setRole] = useState<StaffRole>('Staff');
   const branchOptions = [NO_BRANCH, ...branchNames];
   const [branch, setBranch] = useState(branchOptions[0]);
@@ -289,13 +392,13 @@ function AddUserSheet({
 
   const nameError = !name.trim() ? 'Name is required' : undefined;
   const emailError = !isEmail(email) ? 'Enter a valid email address' : rows.some((u) => u.email.toLowerCase() === email.trim().toLowerCase()) ? 'This email already has a user' : undefined;
-  const passwordError = password.length < 8 ? 'Use at least 8 characters' : undefined;
+  const passwordError = !byInvite && password.length < 8 ? 'Use at least 8 characters' : undefined;
   const driverError = role === 'Driver' && !driverId ? 'Choose the driver this account is for' : undefined;
 
   const submit = () => {
     setTouched(true);
     if (nameError || emailError || passwordError || driverError) return;
-    onSave({ name: name.trim(), email: email.trim().toLowerCase(), role, branch: branch === NO_BRANCH ? '' : branch, password, driverId: role === 'Driver' ? driverId : undefined });
+    onSave({ name: name.trim(), email: email.trim().toLowerCase(), role, branch: branch === NO_BRANCH ? '' : branch, password: byInvite ? undefined : password, driverId: role === 'Driver' ? driverId : undefined });
   };
 
   return (
@@ -306,14 +409,22 @@ function AddUserSheet({
       footer={
         <>
           <Button label="Cancel" variant="ghost" onPress={onClose} />
-          <Button label="Add user" onPress={submit} />
+          <Button label={byInvite ? 'Add and get link' : 'Add user'} onPress={submit} />
         </>
       }>
       <FormRow>
         <Field label="Full name" required value={name} onChangeText={setName} error={touched ? nameError : undefined} />
         <Field label="Email" required value={email} onChangeText={setEmail} keyboardType="email-address" error={touched ? emailError : undefined} />
       </FormRow>
-      <Field label="Starting password" required secureTextEntry value={password} onChangeText={setPassword} error={touched ? passwordError : undefined} hint="Share it with them privately. You can reset it later." />
+      <Text style={styles.label}>How will they get in?</Text>
+      <ChipGroup options={ACCESS_METHODS} value={access} onChange={setAccess} />
+      {byInvite ? (
+        <Text style={[styles.meta, { marginTop: 8, marginBottom: 12 }]}>You get a one-time link to send them on WhatsApp or email. They open it and choose their own password. The link works for 7 days.</Text>
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <Field label="Starting password" required secureTextEntry value={password} onChangeText={setPassword} error={touched ? passwordError : undefined} hint="Share it with them privately. They can change it later from their account menu." />
+        </View>
+      )}
       <Text style={styles.label}>Role</Text>
       <ChipGroup options={canAddOwner ? ROLES : ROLES.filter((r) => r !== 'Owner')} value={role} onChange={setRole} labels={roleLabels(ROLES)} />
       {role === 'Driver' ? (

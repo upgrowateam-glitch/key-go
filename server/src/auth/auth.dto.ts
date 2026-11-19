@@ -36,6 +36,13 @@ export class RegisterCustomerDto {
   password: string;
 }
 
+export class AcceptInviteDto {
+  @IsString()
+  @MinLength(8, { message: 'Use at least 8 characters for the password.' })
+  @MaxLength(100)
+  password: string;
+}
+
 export class ChangePasswordDto {
   @IsString()
   @MinLength(1, { message: 'Enter your current password.' })

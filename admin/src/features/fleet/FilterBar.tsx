@@ -44,7 +44,7 @@ export function FilterBar<S extends string>({
             placeholder={placeholder}
             placeholderTextColor={colors.muted}
             style={styles.searchInput}
-            accessibilityLabel="Search vehicles"
+            accessibilityLabel={placeholder}
           />
           {query ? (
             <TouchableOpacity accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => onQuery('')}>
