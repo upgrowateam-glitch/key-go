@@ -1,13 +1,13 @@
 import { useRouter } from '@/shims/expo-router';
-import { CalendarClock, Search } from 'lucide-react-native';
+import { CalendarClock } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { Card, ChipGroup, Column, DataTable, EmptyState, Field, Grid, StatTile, StatusBadge } from '../../../components/kit';
+import { Column, DataTable, EmptyState, Grid, StatTile, StatusBadge } from '../../../components/kit';
 import { useApp } from '../../../context/AppContext';
 import { useResponsive } from '../../../hooks/useResponsive';
 import { formatDate, formatINR } from '../../../lib/format';
-import { useThemeColors } from '../../../theme';
 import { Booking, Vehicle } from '../../../types';
+import { FilterBar, FilterOptions } from '../FilterBar';
 import { ListPager, usePaged } from '../ListPager';
 
 const STATUS_FILTERS = ['All', 'Quoted', 'Confirmed', 'Active', 'Completed', 'Cancelled'] as const;
@@ -29,7 +29,6 @@ const COLUMNS: Column<Booking>[] = [
 ];
 
 export function RentalHistoryTab({ v }: { v: Vehicle }) {
-  const colors = useThemeColors();
   const router = useRouter();
   const { cols } = useResponsive();
   const { bookings } = useApp();
@@ -54,11 +53,23 @@ export function RentalHistoryTab({ v }: { v: Vehicle }) {
         <StatTile label="Rented days" value={earning.reduce((s, b) => s + b.days, 0)} tone="info" hint="Confirmed, active & completed" />
         <StatTile label="Booked value" value={formatINR(earning.reduce((s, b) => s + b.totalAmount, 0))} tone="primary" />
       </Grid>
-      <Card style={{ gap: 10, marginBottom: 12 }}>
-        <Field label="Search" value={query} onChangeText={setQuery} placeholder="Booking ID or customer" left={<Search size={16} color={colors.muted} />} style={{ marginBottom: 0 }} />
-        <ChipGroup options={STATUS_FILTERS} value={status} onChange={setStatus} scroll />
-        <ChipGroup options={SORT_KEYS} value={sort} onChange={setSort} scroll />
-      </Card>
+      {/* Same toolbar as the vehicle list: search, Filters (status) and Sort */}
+      <View style={{ marginBottom: 12, zIndex: 20 }}>
+        <FilterBar
+          query={query}
+          onQuery={setQuery}
+          placeholder="Search booking ID or customer..."
+          active={status === 'All' ? [] : [{ key: 'status', label: status, onClear: () => setStatus('All') }]}
+          onClearAll={() => {
+            setStatus('All');
+            setQuery('');
+          }}
+          sortOptions={SORT_KEYS}
+          sort={sort}
+          onSort={setSort}
+          panel={<FilterOptions label="Status" options={STATUS_FILTERS} value={status} onChange={setStatus} />}
+        />
+      </View>
       <DataTable
         columns={COLUMNS}
         rows={paged.rows}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Tag } from 'lucide-react-native';
+import { CalendarDays, IndianRupee, Phone, ReceiptText, Tag, TrendingDown, TrendingUp, TriangleAlert, User, Wallet } from 'lucide-react-native';
 import { Badge, Button, Card, ConfirmDialog, Field, FormRow, FormSheet, KeyValueGrid, StatusBadge } from '../../../components/kit';
 import { useApp } from '../../../context/AppContext';
 import { formatDate, formatINR } from '../../../lib/format';
@@ -8,6 +8,7 @@ import { useThemeColors, useThemedStyles } from '../../../theme';
 import { Vehicle } from '../../../types';
 import { makeStyles } from '../detailStyles';
 import { ISO_DATE, num } from '../shared';
+import { HeroStat } from '../ui';
 
 export function SalePanel({ v }: { v: Vehicle }) {
   const colors = useThemeColors();
@@ -128,32 +129,42 @@ export function SalePanel({ v }: { v: Vehicle }) {
             <Button label="Mark as sold" variant="danger" onPress={submit} />
           </>
         }>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 12, backgroundColor: colors.dangerGlow, marginBottom: 16 }}>
+          <TriangleAlert size={18} color={colors.danger} />
+          <Text style={{ flex: 1, color: colors.txt, fontSize: 13, lineHeight: 19 }}>
+            <Text style={{ fontWeight: '800' }}>
+              {v.name} · {v.vehicleNumber}
+            </Text>{' '}
+            will be marked Sold and can no longer be booked. You will be asked to confirm.
+          </Text>
+        </View>
+
+        <Text style={styles.formHeading}>Sale details</Text>
         <FormRow>
-          <Field label="Sale date" required value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" error={errors.date} />
-          <Field label="Sale price (₹)" required value={price} onChangeText={setPrice} keyboardType="number-pad" error={errors.price} />
+          <Field label="Sale date" required value={date} onChangeText={(t) => { setDate(t); setErrors((e) => ({ ...e, date: undefined })); }} placeholder="YYYY-MM-DD" error={errors.date} left={<CalendarDays size={16} color={colors.muted} />} />
+          <Field label="Sale price (₹)" required value={price} onChangeText={(t) => { setPrice(t); setErrors((e) => ({ ...e, price: undefined })); }} keyboardType="number-pad" placeholder="e.g. 650000" error={errors.price} left={<IndianRupee size={16} color={colors.muted} />} />
         </FormRow>
+
+        <Text style={styles.formHeading}>Buyer</Text>
         <FormRow>
-          <Field label="Buyer name" required value={buyer} onChangeText={setBuyer} error={errors.buyer} />
-          <Field label="Buyer phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="Optional" />
+          <Field label="Buyer name" required value={buyer} onChangeText={(t) => { setBuyer(t); setErrors((e) => ({ ...e, buyer: undefined })); }} placeholder="Full name" error={errors.buyer} left={<User size={16} color={colors.muted} />} />
+          <Field label="Buyer phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholder="Optional" left={<Phone size={16} color={colors.muted} />} />
         </FormRow>
         <Field label="Notes" value={notes} onChangeText={setNotes} multiline placeholder="Handover details, documents transferred…" />
-        <Card tone="soft" style={{ marginBottom: 12 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-            <View>
-              <Text style={styles.kLabel}>Purchase cost</Text>
-              <Text style={styles.kValue}>{formatINR(v.purchaseCost)}</Text>
-            </View>
-            <View>
-              <Text style={styles.kLabel}>Sale price</Text>
-              <Text style={styles.kValue}>{p > 0 ? formatINR(p) : '—'}</Text>
-            </View>
-            <View>
-              <Text style={styles.kLabel}>Difference</Text>
-              <Text style={styles.kValue}>{diff === null ? '—' : formatINR(diff, { sign: true })}</Text>
-            </View>
-          </View>
-          {v.loanDetails ? <Text style={[styles.hint, { marginTop: 8 }]}>Loan outstanding (estimate) {formatINR(outstanding)} should be closed with {v.loanDetails.bankName}.</Text> : null}
-        </Card>
+
+        <Text style={styles.formHeading}>Summary</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+          <HeroStat icon={Wallet} label="Purchase cost" value={formatINR(v.purchaseCost)} />
+          <HeroStat icon={ReceiptText} label="Sale price" value={p > 0 ? formatINR(p) : '—'} tone="info" />
+          <HeroStat
+            icon={diff !== null && diff < 0 ? TrendingDown : TrendingUp}
+            label="Difference"
+            value={diff === null ? '—' : formatINR(diff, { sign: true })}
+            hint={diff === null ? 'Enter the sale price' : diff >= 0 ? 'Above purchase cost' : 'Below purchase cost'}
+            tone={diff === null ? 'primary' : diff >= 0 ? 'success' : 'danger'}
+          />
+        </View>
+        {v.loanDetails ? <Text style={[styles.hint, { marginBottom: 12 }]}>Loan outstanding (estimate) {formatINR(outstanding)} should be closed with {v.loanDetails.bankName}.</Text> : null}
       </FormSheet>
       <ConfirmDialog
         visible={confirming}

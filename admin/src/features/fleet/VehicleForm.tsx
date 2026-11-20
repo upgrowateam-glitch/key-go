@@ -9,6 +9,7 @@ import { useResource } from '../../services/mockClient';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 import { CarKind, Vehicle, VehicleType } from '../../types';
 import { ISO_DATE, num } from './shared';
+import { SelectField } from '../../components/portal/SelectField';
 import { normaliseRegistration } from '../../lib/registration';
 
 type FuelType = string;
@@ -215,27 +216,17 @@ export function VehicleForm({
         <Field label="Brand" value={form.brand} onChangeText={(t) => set('brand', t)} placeholder="Optional" />
       </FormRow>
       <Field label="Registration number" required value={form.number} onChangeText={(t) => set('number', t)} placeholder="e.g. KA 01 AB 1234" error={errors.number} />
-      <Text style={styles.fieldLabel}>Type</Text>
-      <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={activeNames(masterLists().vehicleTypes, vehicle?.type)} value={form.type} onChange={(t) => set('type', t)} />
-      </View>
-      <Text style={styles.fieldLabel}>Category</Text>
-      <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={activeNames(masterLists().categories, category)} value={form.category} onChange={(t) => set('category', t)} />
-      </View>
-      <Text style={styles.fieldLabel}>Fuel type</Text>
-      <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={activeNames(masterLists().fuelTypes, vehicle?.fuel)} value={form.fuel} onChange={(t) => set('fuel', t)} />
-      </View>
-      <Text style={styles.fieldLabel}>Branch</Text>
-      <View style={{ marginBottom: 14 }}>
-        <ChipGroup options={branchOptions} value={form.branch} onChange={(t) => set('branch', t)} />
-      </View>
+      {/* Same choices as before, as tidy dropdowns two per row */}
       <FormRow>
-        <View style={{ marginBottom: 14 }}>
-          <Text style={styles.fieldLabel}>Transmission</Text>
-          <SegmentedControl options={TRANSMISSIONS} value={form.transmission} onChange={(t) => set('transmission', t)} />
-        </View>
+        <SelectField label="Type" options={activeNames(masterLists().vehicleTypes, vehicle?.type)} value={form.type} onChange={(t) => set('type', t)} />
+        <SelectField label="Category" options={activeNames(masterLists().categories, category)} value={form.category} onChange={(t) => set('category', t)} />
+      </FormRow>
+      <FormRow>
+        <SelectField label="Fuel type" options={activeNames(masterLists().fuelTypes, vehicle?.fuel)} value={form.fuel} onChange={(t) => set('fuel', t)} />
+        <SelectField label="Transmission" options={TRANSMISSIONS} value={form.transmission} onChange={(t) => set('transmission', t)} />
+      </FormRow>
+      <FormRow>
+        <SelectField label="Branch" options={branchOptions} value={form.branch} onChange={(t) => set('branch', t)} />
         <Field label="Seats" required value={form.seats} onChangeText={(t) => set('seats', t)} keyboardType="number-pad" error={errors.seats} />
       </FormRow>
       <FormRow>

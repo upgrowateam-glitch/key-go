@@ -53,6 +53,14 @@ export const makeStyles = (colors: ThemeColors) =>
       borderRadius: 12,
       padding: 12,
     },
+    formHeading: {
+      color: colors.primaryText,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginBottom: 10,
+    },
     muted: {
       color: colors.muted,
       fontSize: 12,
