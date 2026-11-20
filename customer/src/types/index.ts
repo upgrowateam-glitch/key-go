@@ -73,6 +73,8 @@ export interface Vehicle {
   photoKey?: string;
   /** The car's own main photo on the KeyGo server (uploaded by staff). */
   mainPhotoPath?: string;
+  /** All uploaded views (main photo first) for the gallery on the car page. */
+  photoGallery?: { slot: string; label: string; path: string }[];
   /** Current price list from the server; pricePerDay equals rates.daily. */
   rates?: import('../data/pricing').VehicleRates;
   imageAsset?: any;

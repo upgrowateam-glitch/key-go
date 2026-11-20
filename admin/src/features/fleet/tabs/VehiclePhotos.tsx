@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Image, Pressable, Text, View } from 'react-native';
-import { Camera, Star, Trash2, Upload } from 'lucide-react-native';
+import { Camera, Trash2, Upload } from 'lucide-react-native';
 import { Badge, Button, Card, ConfirmDialog, Grid } from '../../../components/kit';
 import { useApp } from '../../../context/AppContext';
 import { useResponsive } from '../../../hooks/useResponsive';
@@ -11,6 +11,7 @@ import { Vehicle } from '../../../types';
 import { makeStyles } from '../detailStyles';
 
 const SLOTS = [
+  { key: 'main', label: 'Main photo' },
   { key: 'front', label: 'Front' },
   { key: 'back', label: 'Back' },
   { key: 'left', label: 'Left side' },
@@ -24,7 +25,10 @@ const MAX_BYTES = 10 * 1024 * 1024;
 /** Where a car photo is served from (only photos attached to the car are served). */
 export const vehiclePhotoUri = (vehicleId: string, fileId: string) => `${API_URL}/public/vehicles/${encodeURIComponent(vehicleId)}/photos/${encodeURIComponent(fileId)}`;
 
-/** Real photos of the car by position. The main photo is what customers see in the app. */
+/**
+ * Real photos of the car. The Main photo is what customers see first (car lists and the top of the car's page);
+ * without one, the Front photo is used. Customers swipe through all the views on the car's page in the app.
+ */
 export function VehiclePhotos({ v }: { v: Vehicle }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
@@ -36,11 +40,11 @@ export function VehiclePhotos({ v }: { v: Vehicle }) {
   const [removing, setRemoving] = useState<string | null>(null);
 
   const photos = v.photos ?? {};
-  const main = v.mainPhoto && photos[v.mainPhoto] ? v.mainPhoto : photos.front ? 'front' : Object.keys(photos)[0];
+  const main = photos.main ? 'main' : v.mainPhoto && photos[v.mainPhoto] ? v.mainPhoto : photos.front ? 'front' : Object.keys(photos)[0];
   const count = Object.keys(photos).length;
 
   const save = (nextPhotos: Record<string, string>, nextMain?: string) => {
-    const mainKey = nextMain && nextPhotos[nextMain] ? nextMain : nextPhotos.front ? 'front' : Object.keys(nextPhotos)[0];
+    const mainKey = nextPhotos.main ? 'main' : nextMain && nextPhotos[nextMain] ? nextMain : nextPhotos.front ? 'front' : Object.keys(nextPhotos)[0];
     updateVehicle(v.id, {
       photos: nextPhotos,
       mainPhoto: mainKey,
@@ -89,7 +93,7 @@ export function VehiclePhotos({ v }: { v: Vehicle }) {
         <View style={{ marginBottom: 12 }}>
           <Text style={styles.cardTitle}>Vehicle photos</Text>
           <Text style={styles.hint}>
-            {count} of {SLOTS.length} photos on file. The ★ main photo is shown to customers in the app. JPG, PNG or WebP up to 10 MB.
+            {count} of {SLOTS.length} photos on file. Customers see the ★ Main photo first, then swipe through all the views on the car's page. JPG, PNG or WebP up to 10 MB.
           </Text>
         </View>
         <Grid cols={cols(2, 3, 3)} gap={12}>
@@ -97,8 +101,9 @@ export function VehiclePhotos({ v }: { v: Vehicle }) {
             const fileId = photos[s.key];
             const uri = previews[s.key] ?? (fileId ? vehiclePhotoUri(v.id, fileId) : undefined);
             const isMain = main === s.key && !!fileId;
+            const isMainSlot = s.key === 'main';
             return (
-              <View key={s.key} style={{ borderWidth: 1, borderColor: isMain ? colors.highlight : colors.line, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.card }}>
+              <View key={s.key} style={{ borderWidth: isMainSlot ? 2 : 1, borderColor: isMain || isMainSlot ? colors.highlight : colors.line, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.card }}>
                 <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={`${fileId ? 'Replace' : 'Upload'} ${s.label} photo`}
@@ -111,18 +116,14 @@ export function VehiclePhotos({ v }: { v: Vehicle }) {
                   ) : (
                     <View style={{ alignItems: 'center', gap: 6 }}>
                       <Camera size={22} color={colors.muted} />
-                      <Text style={styles.hint}>Upload {s.label.toLowerCase()}</Text>
+                      <Text style={styles.hint}>{isMainSlot ? 'Upload main photo' : `Upload ${s.label.toLowerCase()}`}</Text>
+                      {isMainSlot ? <Text style={[styles.hint, { fontSize: 11 }]}>Customers see this first</Text> : null}
                     </View>
                   )}
                 </Pressable>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, flexWrap: 'wrap' }}>
                   <Text style={[styles.cardTitle, { fontSize: 13, flex: 1 }]}>{s.label}</Text>
                   {isMain ? <Badge label="★ Main" tone="highlight" /> : null}
-                  {fileId && !isMain ? (
-                    <Pressable accessibilityRole="button" accessibilityLabel={`Use ${s.label} as main photo`} onPress={() => save(photos, s.key)} hitSlop={6} style={{ padding: 4 }}>
-                      <Star size={15} color={colors.muted} />
-                    </Pressable>
-                  ) : null}
                   {fileId ? (
                     <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${s.label} photo`} onPress={() => setRemoving(s.key)} hitSlop={6} style={{ padding: 4 }}>
                       <Trash2 size={15} color={colors.danger} />
@@ -139,14 +140,14 @@ export function VehiclePhotos({ v }: { v: Vehicle }) {
         </Grid>
         {count === 0 ? (
           <View style={{ marginTop: 12 }}>
-            <Button label="Upload front photo" size="sm" icon={(c) => <Upload size={14} color={c} />} onPress={() => upload('front', 'Front')} />
+            <Button label="Upload main photo" size="sm" icon={(c) => <Upload size={14} color={c} />} onPress={() => upload('main', 'Main')} />
           </View>
         ) : null}
       </Card>
       <ConfirmDialog
         visible={!!removing}
         title="Remove this photo?"
-        message="It is deleted from KeyGo. Customers see the next photo, or the standard picture if none is left."
+        message="It is deleted from KeyGo. If it was the main photo, customers see the Front photo first instead (or the standard picture if none is left)."
         confirmLabel="Remove"
         danger
         onCancel={() => setRemoving(null)}

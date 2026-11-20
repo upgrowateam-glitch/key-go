@@ -21,5 +21,5 @@ export const codeNumber = (code: unknown) => {
 };
 
 /** Photo positions staff can upload for a car; "front" is shown to customers unless another is chosen. */
-export const PHOTO_SLOTS = ['front', 'back', 'left', 'right', 'interior', 'dashboard'] as const;
+export const PHOTO_SLOTS = ['main', 'front', 'back', 'left', 'right', 'interior', 'dashboard'] as const;
 export type PhotoSlot = (typeof PHOTO_SLOTS)[number];

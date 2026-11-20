@@ -69,11 +69,34 @@ const vehicleDefaults = (type: string): Json => ({
 
 /** A vehicle for the apps. Weekly, monthly and deposit follow the pricing rules unless the car has its own prices. */
 /** Path of the photo customers see: the chosen main photo, else the front, else the first one uploaded. */
+const photosOf = (details: Json) => (details.photos && typeof details.photos === 'object' ? details.photos : {}) as Record<string, string>;
+const photoPath = (id: string, fileId: string) => `/public/vehicles/${encodeURIComponent(id)}/photos/${encodeURIComponent(fileId)}`;
+
+/** The photo customers see first: the uploaded "main" photo, else the one chosen as main, else the front, else any. */
 function mainPhotoPath(id: string, details: Json): string | undefined {
-  const photos = (details.photos && typeof details.photos === 'object' ? details.photos : {}) as Record<string, string>;
+  const photos = photosOf(details);
   const chosen = typeof details.mainPhoto === 'string' ? photos[details.mainPhoto] : undefined;
-  const fileId = chosen ?? photos.front ?? Object.values(photos)[0];
-  return fileId ? `/public/vehicles/${encodeURIComponent(id)}/photos/${encodeURIComponent(fileId)}` : undefined;
+  const fileId = photos.main ?? chosen ?? photos.front ?? Object.values(photos)[0];
+  return fileId ? photoPath(id, fileId) : undefined;
+}
+
+/** Order and names of the car views shown to customers (swipe through them on the car's page). */
+const GALLERY: [slot: string, label: string][] = [
+  ['main', 'Main photo'],
+  ['front', 'Front'],
+  ['back', 'Back'],
+  ['left', 'Left side'],
+  ['right', 'Right side'],
+  ['interior', 'Interior'],
+  ['dashboard', 'Dashboard'],
+];
+
+/** Every uploaded view, main photo first, without repeating the same picture. */
+function photoGallery(id: string, details: Json) {
+  const photos = photosOf(details);
+  const main = mainPhotoPath(id, details);
+  const views = GALLERY.filter(([slot]) => photos[slot]).map(([slot, label]) => ({ slot, label, path: photoPath(id, photos[slot]) }));
+  return main ? [...views.filter((p) => p.path === main).slice(0, 1), ...views.filter((p) => p.path !== main)] : views;
 }
 
 export function vehicleToApi(v: VehicleWithRates, rules: PricingRules = DEFAULT_PRICING): Json {
@@ -110,6 +133,8 @@ export function vehicleToApi(v: VehicleWithRates, rules: PricingRules = DEFAULT_
     photoUrl: v.photoUrl ?? undefined,
     // The car's main photo uploaded by staff (Vehicle → Photos), served by /public/vehicles/:id/photos/:fileId
     mainPhotoPath: mainPhotoPath(v.id, details),
+    // All uploaded views for the photo gallery on the car's page (main photo first)
+    photoGallery: photoGallery(v.id, details),
     pricePerDay: rates?.daily ?? 0,
     rates,
   };

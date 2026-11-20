@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { PhotoGallery } from '../../components/ui/PhotoGallery';
 import { View, Text, StyleSheet, } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -119,12 +120,17 @@ export default function VehicleDetailsScreen() {
   const hero = (
     <Card padded={false} style={{ overflow: 'hidden' }}>
       <View style={[styles.heroArea, { aspectRatio: VEHICLE_PHOTO_ASPECT }]}>
-        <VehiclePhoto
-          source={vehicle.imageAsset}
-          style={StyleSheet.absoluteFill}
-          radius={0}
-          accessibilityLabel={`${vehicle.name} photo`}
-        />
+        {/* All the car's views when KeyGo uploaded more than one; otherwise the single photo */}
+        {(vehicle.photoGallery?.length ?? 0) > 1 ? (
+          <PhotoGallery photos={vehicle.photoGallery!} carName={vehicle.name} />
+        ) : (
+          <VehiclePhoto
+            source={vehicle.imageAsset}
+            style={StyleSheet.absoluteFill}
+            radius={0}
+            accessibilityLabel={`${vehicle.name} photo`}
+          />
+        )}
         {vehicle.badge ? (
           <View style={styles.badgePill}>
             <Text style={styles.badgePillText}>{vehicle.badge}</Text>
