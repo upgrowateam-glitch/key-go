@@ -103,6 +103,7 @@ interface AppContextType {
   setSelectedCategory: (cat: string) => void;
   updateVehicleStatus: (id: string, status: Vehicle['status']) => void;
   updateVehicle: (id: string, patch: Partial<Vehicle>) => void;
+  showVehicleChange: (id: string, patch: Partial<Vehicle>) => void;
   addVehicle: (vehicle: Vehicle) => void;
   markVehicleSold: (id: string, sale: NonNullable<Vehicle['saleInfo']>) => void;
 
@@ -243,7 +244,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   });
   const records = <T,>(collection: string) => (seed.records[collection] ?? []) as T[];
 
-  const [vehicles, setVehicles, vehiclesRef] = useSyncedList<Vehicle>(seed.vehicles, {
+  const [vehicles, setVehicles, vehiclesRef, setVehiclesLocal] = useSyncedList<Vehicle>(seed.vehicles, {
     keyOf: (v) => v.id,
     save: ({ imageAsset: _photo, ...v }) => api(`/admin/vehicles/${enc(v.id)}`, { method: 'PUT', body: v }),
     onError: onSaveError,
@@ -307,6 +308,10 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
 
   const updateVehicle = (id: string, patch: Partial<Vehicle>) =>
     setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
+
+  /** Shows a change the server already made (photos uploaded from a phone) without saving the car again. */
+  const showVehicleChange = (id: string, patch: Partial<Vehicle>) =>
+    setVehiclesLocal(vehiclesRef.current.map((v) => (v.id === id ? { ...v, ...patch } : v)));
 
   const addVehicle = (newVehicle: Vehicle) => {
     setVehicles((prev) => [newVehicle, ...prev]);
@@ -672,6 +677,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         setSelectedCategory,
         updateVehicleStatus,
         updateVehicle,
+        showVehicleChange,
         addVehicle,
         markVehicleSold,
         bookings,

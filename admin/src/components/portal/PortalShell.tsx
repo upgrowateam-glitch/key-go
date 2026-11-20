@@ -363,8 +363,9 @@ function Workspace({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [session, setSession] = useState<StaffSession | null>(() => readSession());
   const isLogin = pathname === '/login';
-  // Invitation links open without a session (and replace any session once accepted)
-  const isPublic = isLogin || pathname === '/invite';
+  // Invitation links open without a session (and replace any session once accepted); so does the phone photo
+  // page opened from a car's QR code
+  const isPublic = isLogin || pathname === '/invite' || pathname === '/photo-upload';
   const refresh = () => setSession(readSession());
 
   useEffect(() => {

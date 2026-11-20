@@ -78,5 +78,6 @@ export function useSyncedList<T>(initial: T[], options: SyncOptions<T>) {
     [enqueue, setLocal]
   );
 
-  return [items, set, ref] as const;
+  // setLocal: show a change the server already has (e.g. a photo uploaded from a phone) without saving it again
+  return [items, set, ref, setLocal] as const;
 }

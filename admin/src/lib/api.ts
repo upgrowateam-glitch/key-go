@@ -40,7 +40,7 @@ export const setUnauthorizedHandler = (fn: (() => void) | null) => {
   onUnauthorized = fn;
 };
 
-async function errorFrom(res: Response): Promise<ApiError> {
+export async function errorFrom(res: Response): Promise<ApiError> {
   let message = `The KeyGo server answered ${res.status}.`;
   try {
     const body = await res.json();

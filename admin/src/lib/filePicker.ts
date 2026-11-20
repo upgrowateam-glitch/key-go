@@ -1,5 +1,5 @@
 /** Opens the browser's file dialog and resolves with the chosen file, or null when the dialog is dismissed. */
-export function pickFile(accept: string): Promise<File | null> {
+export function pickFile(accept: string, capture?: 'environment'): Promise<File | null> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') {
       resolve(null);
@@ -8,6 +8,8 @@ export function pickFile(accept: string): Promise<File | null> {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = accept;
+    // On phones this opens the camera straight away (the back camera)
+    if (capture) input.setAttribute('capture', capture);
     input.style.display = 'none';
     let settled = false;
     const finish = (file: File | null) => {
@@ -39,3 +41,8 @@ export function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/** Any photo the browser can open; the crop step turns it into a JPG before upload. */
+export const PHOTO_ACCEPT = 'image/*';
+/** Photos straight off a phone can be large; the crop step shrinks them to at most 2000 px. */
+export const PHOTO_MAX_INPUT_BYTES = 40 * 1024 * 1024;
