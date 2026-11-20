@@ -324,7 +324,58 @@ model StoredFile {
   size       Int
   path       String
   uploadedBy String?  @map("uploaded_by")
+  /// "identity" files (ID cards, licences, face photos) are encrypted and only opened through the identity routes.
+  category   String   @default("general")
+  encrypted  Boolean  @default(false)
+  /// The file's own key, encrypted with the server key (see common/crypto.ts).
+  wrappedKey String?  @map("wrapped_key")
+  /// Which server key wrapped it.
+  keyId      String?  @map("key_id")
+  identityDocuments IdentityDocument[]
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("stored_files")
+}
+
+/// ID cards, licences, photos and other identity papers of customers and drivers (one per position).
+model IdentityDocument {
+  id           String             @id @default(cuid())
+  /// "customer" or "driver"
+  ownerType    String             @map("owner_type")
+  ownerId      String             @map("owner_id")
+  /// photo, selfie, id_front, id_back, dl_front, dl_back, address_proof, police_verification
+  kind         String
+  status       VerificationStatus @default(PENDING)
+  fileId       String             @map("file_id")
+  file         StoredFile         @relation(fields: [fileId], references: [id])
+  uploadedBy   String?            @map("uploaded_by")
+  /// staff, staff-phone, customer-link
+  uploadedVia  String             @default("staff") @map("uploaded_via")
+  rejectReason String?            @map("reject_reason")
+  reviewedBy   String?            @map("reviewed_by")
+  reviewedAt   DateTime?          @map("reviewed_at")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@unique([ownerType, ownerId, kind])
+  @@index([ownerType, ownerId])
+  @@map("identity_documents")
+}
+
+/// Append-only record of sensitive actions (the database refuses updates and deletes).
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  at          DateTime @default(now())
+  actorId     String?  @map("actor_id")
+  actorName   String   @map("actor_name")
+  actorRole   String?  @map("actor_role")
+  action      String
+  subjectType String   @map("subject_type")
+  subjectId   String   @map("subject_id")
+  subjectName String?  @map("subject_name")
+  detail      Json     @default("{}")
+
+  @@index([subjectType, subjectId, at])
+  @@index([at])
+  @@map("audit_log")
 }

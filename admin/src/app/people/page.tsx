@@ -3,6 +3,7 @@
 import { SectionPage } from '../../components/portal/SectionPage';
 import AttendanceTab from '../../features/people/AttendanceTab';
 import DriverAssignmentsTab from '../../features/people/DriverAssignmentsTab';
+import DriverPayTab from '../../features/people/DriverPayTab';
 import DriversTab from '../../features/people/DriversTab';
 import PayrollTab from '../../features/people/PayrollTab';
 import StaffDirectoryTab from '../../features/people/StaffDirectoryTab';
@@ -18,6 +19,7 @@ export default function PeoplePage() {
         'driver-assignments': DriverAssignmentsTab,
         attendance: AttendanceTab,
         payroll: PayrollTab,
+        'driver-pay': DriverPayTab,
       }}
     />
   );

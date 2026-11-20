@@ -14,8 +14,9 @@ export const TIER_TONE: Record<Customer['loyaltyTier'], Tone> = {
   VIP: 'primary',
 };
 
-/** Overall KYC state derived from ID card + face verification. */
+/** Overall verification from the server (ID card, licence, licence validity, face check). */
 export function kycState(c: Customer): Exclude<KycFilter, 'All'> {
+  if (c.kycStatus) return c.kycStatus === 'Not verified' ? 'Incomplete' : c.kycStatus;
   if (c.idCardStatus === 'Rejected' || c.faceVerification === 'Rejected') return 'Rejected';
   if (c.idCardStatus === 'Verified' && c.faceVerification === 'Verified') return 'Verified';
   if (c.idCardStatus === 'Pending' || c.faceVerification === 'Pending') return 'Pending';

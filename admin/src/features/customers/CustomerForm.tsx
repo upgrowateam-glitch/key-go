@@ -4,6 +4,8 @@ import { Button, ChipGroup, Field, FormRow, FormSheet } from '../../components/k
 import { useApp } from '../../context/AppContext';
 import { formatDate } from '../../lib/format';
 import { ActivityInput, logCustomerActivity } from '../../services/customers';
+import { saveAadhaar } from '../../services/identity';
+import { checkLicence } from '../../lib/licence';
 import { useThemeColors, useThemedStyles } from '../../theme';
 import type { Customer } from '../../types';
 import { licenceState, makeStyles, maskAadhaar, maskLicence } from './shared';
@@ -33,11 +35,7 @@ const blankDraft = (today: string, avatarBg: string): Draft => ({
   careOfRelation: '',
   careOfPhone: '',
   customerCode: '',
-  documents: [
-    { id: `doc-${Date.now()}-1`, name: 'Aadhaar card (front & back)', kind: 'ID card', status: 'Not uploaded' },
-    { id: `doc-${Date.now()}-2`, name: 'Driving licence', kind: 'Driving licence', status: 'Not uploaded' },
-    { id: `doc-${Date.now()}-3`, name: 'Address proof', kind: 'Address proof', status: 'Not uploaded' },
-  ],
+  documents: [],
   customerSince: today,
   loyaltyTier: 'Bronze',
   loyaltyPoints: 0,
@@ -79,18 +77,37 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer?: Custom
 
   const lic = licenceState(draft.dlExpiry, today);
   const aadhaarDigits = draft.aadhaarNo.replace(/\D/g, '');
+  // Older licence numbers already on file are left alone; new or changed ones must be in the standard format
+  const licenceUnchanged = !!customer && customer.dlNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase() === draft.dlNumber.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const licence = checkLicence(draft.dlNumber);
   const aadhaarOk = !draft.aadhaarNo.trim() || aadhaarDigits.length === 12 || /^X{4}-?X{4}-?\d{4}$/i.test(draft.aadhaarNo.trim());
   const errors: Record<string, string | undefined> = {
     firstName: !draft.firstName.trim() ? 'First name is required' : undefined,
     lastName: !draft.lastName.trim() ? 'Last name is required' : undefined,
     phone: draft.phone.replace(/\D/g, '').length < 10 ? 'Enter a valid phone number (10+ digits)' : undefined,
-    dlNumber: !draft.dlNumber.trim() ? 'Driving licence number is required' : undefined,
+    dlNumber: !draft.dlNumber.trim() ? 'Driving licence number is required' : licenceUnchanged ? undefined : 'error' in licence ? licence.error : undefined,
     dob: draft.dob && !DATE_RE.test(draft.dob) ? 'Use YYYY-MM-DD' : draft.dob > today ? 'Date of birth is in the future' : undefined,
     dlExpiry: draft.dlExpiry && !DATE_RE.test(draft.dlExpiry) ? 'Use YYYY-MM-DD' : undefined,
     email: draft.email && !/^\S+@\S+\.\S+$/.test(draft.email) ? 'Enter a valid email' : undefined,
     aadhaarNo: aadhaarOk ? undefined : 'Enter the 12-digit number',
   };
   const err = (k: string) => (submitted ? errors[k] : undefined);
+
+  /**
+   * The full number goes to the server (encrypted there); the portal only keeps XXXX-XXXX-1234. A new customer is
+   * saved first, so retry for a few seconds while that save finishes.
+   */
+  const storeAadhaar = async (id: string, digits: string, attempt = 0): Promise<void> => {
+    try {
+      await saveAadhaar(id, digits);
+    } catch (e) {
+      if (attempt < 5 && (e as { status?: number }).status === 404) {
+        await new Promise((res) => setTimeout(res, 1000));
+        return storeAadhaar(id, digits, attempt + 1);
+      }
+      showToast(`Aadhaar number not saved: ${(e as Error).message}`);
+    }
+  };
 
   const save = () => {
     setSubmitted(true);
@@ -104,7 +121,8 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer?: Custom
       lastName: draft.lastName.trim(),
       name: `${draft.firstName.trim()} ${draft.lastName.trim()}`.trim(),
       phone: draft.phone.trim(),
-      dlNumber: draft.dlNumber.trim().toUpperCase(),
+      dlNumber: !licenceUnchanged && 'number' in licence ? licence.number : draft.dlNumber.trim().toUpperCase(),
+      dlState: draft.dlState.trim() || ('state' in licence ? licence.state : ''),
       // Only the masked form is kept: the full Aadhaar number is never stored in the portal
       aadhaarNo: aadhaarDigits.length === 12 ? maskAadhaar(draft.aadhaarNo) : draft.aadhaarNo.trim(),
     };
@@ -117,11 +135,13 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer?: Custom
         updateCustomer(customer.id, clean);
         logCustomerActivity(customer.id, changes);
       }
+      if (aadhaarDigits.length === 12) storeAadhaar(customer.id, aadhaarDigits);
       showToast(changes.length ? 'Customer profile saved' : 'No changes to save');
       onSaved(customer.id);
     } else {
       const id = `cust-${Date.now()}`;
       addCustomer({ ...clean, id });
+      if (aadhaarDigits.length === 12) storeAadhaar(id, aadhaarDigits);
       logCustomerActivity(id, [{ action: 'Profile created' }]);
       onSaved(id);
     }
@@ -166,7 +186,19 @@ export function CustomerForm({ customer, onClose, onSaved }: { customer?: Custom
 
       <Text style={styles.fieldLabel}>Driving licence</Text>
       <FormRow cols={3}>
-        <Field label="Licence number" required value={draft.dlNumber} onChangeText={(v) => set('dlNumber', v)} placeholder="KA01 20210012345" error={err('dlNumber')} />
+        <Field
+          label="Licence number"
+          required
+          value={draft.dlNumber}
+          onChangeText={(v) => {
+            set('dlNumber', v);
+            const ok = checkLicence(v);
+            if ('state' in ok && !draft.dlState.trim()) set('dlState', ok.state);
+          }}
+          placeholder="KA01 20210012345"
+          error={err('dlNumber')}
+          hint="State code, RTO, year of issue, 7 digits. The state fills in by itself."
+        />
         <Field label="Issuing state" value={draft.dlState} onChangeText={(v) => set('dlState', v)} placeholder="Karnataka" />
         <Field
           label="Expiry date"

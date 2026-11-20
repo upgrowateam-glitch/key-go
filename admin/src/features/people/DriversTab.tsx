@@ -31,6 +31,10 @@ import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { Driver } from '../../types';
 import { CsvButton, FilterGroup, ListToolbar, Pager, SearchField, usePaged } from '../finance/tableTools';
 import { AssignDriverSheet, licenceState } from './AssignDriverSheet';
+import { availability } from './availability';
+import { DriverLeaveCard } from './DriverLeaveCard';
+import { IdentityPanel } from '../identity/IdentityPanel';
+import { DRIVER_SLOTS, useIdentity } from '../identity/useIdentity';
 import { DriverForm } from './DriverForm';
 
 const DUTY_OPTIONS = ['On Duty', 'On Trip', 'Off Duty'] as const;
@@ -192,7 +196,9 @@ export default function DriversTab() {
 function DriverCard({ driver: d, today, onPress }: { driver: Driver; today: string; onPress: () => void }) {
   const styles = useThemedStyles(makeStyles);
   const colors = useThemeColors();
+  const { bookings } = useApp();
   const ls = licenceState(d.licenseExpiry, today);
+  const trips = bookings.filter((b) => b.driverId === d.id && b.status === 'Completed' && (b.completedAt ?? b.returnDate).slice(0, 7) === today.slice(0, 7)).length;
   return (
     <Card onPress={onPress}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -201,7 +207,7 @@ function DriverCard({ driver: d, today, onPress }: { driver: Driver; today: stri
           <Text style={styles.name}>{d.name}</Text>
           <Text style={styles.sub}>{d.phone}</Text>
         </View>
-        <StatusBadge status={d.dutyStatus} />
+        <StatusBadge status={availability(d, bookings, today)} />
       </View>
       <Divider />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
@@ -215,7 +221,7 @@ function DriverCard({ driver: d, today, onPress }: { driver: Driver; today: stri
           <Star size={13} color={colors.warmText} />
           <Text style={styles.cellText}>{d.rating.toFixed(1)}</Text>
         </View>
-        <Text style={styles.cellText}>{d.tripsThisMonth} trips this month</Text>
+        <Text style={styles.cellText}>{trips} trips this month</Text>
       </View>
     </Card>
   );
@@ -235,7 +241,10 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
 
   const pct = Number(pctText);
   const pctError = pctText.trim() === '' || Number.isNaN(pct) ? 'Enter a number' : pct < 0 || pct > 100 ? 'Must be between 0 and 100' : undefined;
-  const estimate = pctError ? 0 : (d.tripRevenueThisMonth * pct) / 100;
+  const docs = useIdentity('driver', d.id);
+  const now = availability(d, bookings, today);
+  const month = today.slice(0, 7);
+  const tripsThisMonth = bookings.filter((b) => b.driverId === d.id && b.status === 'Completed' && (b.completedAt ?? b.returnDate).slice(0, 7) === month);
   const ls = licenceState(d.licenseExpiry, today);
 
   const saveCommission = () => {
@@ -251,13 +260,6 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
     setPendingDuty(null);
   };
 
-  const uploadDoc = (docId: string, name: string) => {
-    updateDriver(d.id, {
-      documents: d.documents.map((doc) => (doc.id === docId ? { ...doc, status: 'Pending', uploadedAt: today } : doc)),
-    });
-    showToast(`${name} uploaded (simulated) · pending verification`);
-  };
-
   return (
     <View style={{ gap: 16 }}>
       <Card>
@@ -269,7 +271,7 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
               {d.phone} · joined {formatDate(d.joinedOn)}
             </Text>
           </View>
-          <StatusBadge status={d.dutyStatus} />
+          <StatusBadge status={now} />
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <Button label="Edit details" size="sm" variant="outline" icon={(c) => <Pencil size={13} color={c} />} onPress={() => setEditing(true)} />
@@ -292,15 +294,17 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
         />
         <Divider />
         <Text style={styles.label}>Duty status</Text>
+        {now === 'On Trip' || now === 'On leave' ? (
+          <Text style={[styles.sub, { marginBottom: 6 }]}>{now === 'On Trip' ? 'On a trip now (set automatically while a booking they drive is active).' : 'On leave today (see Leave & days off).'}</Text>
+        ) : null}
         <SegmentedControl options={DUTY_OPTIONS} value={d.dutyStatus} onChange={(s) => (s === d.dutyStatus ? undefined : setPendingDuty(s))} />
         <View style={{ marginTop: 14 }}>
           <KeyValueGrid
             cols={2}
             items={[
               { label: 'Rating', value: `${d.rating.toFixed(1)} / 5` },
-              { label: 'Trips this month', value: String(d.tripsThisMonth) },
+              { label: 'Trips this month', value: String(tripsThisMonth.length) },
               { label: 'Assigned vehicle', value: d.assignedVehicle ?? 'None' },
-              { label: 'Trip revenue (Sep)', value: formatINR(d.tripRevenueThisMonth) },
             ]}
           />
         </View>
@@ -321,19 +325,12 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
         </View>
       </Card>
 
-      <Card>
-        <Text style={styles.cardTitle}>Documents</Text>
-        <Text style={styles.sub}>Uploads are simulated and nothing leaves the device.</Text>
-        <View style={{ marginTop: 8, gap: 8 }}>
-          {d.documents.length === 0 ? (
-            <EmptyState compact title="No documents" message="Upload licence, ID and police verification." />
-          ) : (
-            d.documents.map((doc) => (
-              <DocumentSlot key={doc.id} title={doc.name} subtitle={doc.uploadedAt ? `Uploaded ${formatDate(doc.uploadedAt)}` : doc.kind} status={doc.status} onUpload={() => uploadDoc(doc.id, doc.name)} />
-            ))
-          )}
-        </View>
-      </Card>
+      <DriverLeaveCard driver={d} />
+
+      <View>
+        <Text style={[styles.cardTitle, { marginBottom: 8 }]}>Documents</Text>
+        <IdentityPanel ownerType="driver" ownerId={d.id} ownerName={d.name} slots={DRIVER_SLOTS} state={docs} onChanged={() => undefined} />
+      </View>
 
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -367,7 +364,7 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
             cols={2}
             items={[
               { label: 'Monthly salary', value: formatINR(d.monthlySalary) },
-              { label: 'Trip revenue (Sep)', value: formatINR(d.tripRevenueThisMonth) },
+              { label: 'Completed trips this month', value: String(tripsThisMonth.length) },
             ]}
           />
         </View>
@@ -378,11 +375,12 @@ function DriverDetail({ driver: d, onAssign, onDeleted }: { driver: Driver; onAs
           <Button label="Save" size="md" variant="outline" disabled={!!pctError || pct === d.commissionPercent} onPress={saveCommission} style={{ marginTop: 22 }} />
         </View>
         <View style={[styles.estimate, { backgroundColor: colors.highlightSoft }]}>
-          <Text style={styles.sub}>Commission this month (estimate)</Text>
-          <Text style={styles.estimateValue}>{formatINR(estimate)}</Text>
-          <Text style={styles.sub}>
-            {formatINR(d.tripRevenueThisMonth)} trip revenue × {pctError ? '—' : `${pct}%`} · payout rules pending confirmation
-          </Text>
+          <Text style={styles.sub}>Commission so far this month</Text>
+          <Text style={styles.estimateValue}>{formatINR(Math.round(tripsThisMonth.reduce((sum, b) => sum + (b.subtotal * (pctError ? d.commissionPercent : pct)) / 100, 0)))}</Text>
+          <Text style={styles.sub}>{pctError ? d.commissionPercent : pct}% of the trip amount (before tax) of each completed trip. Salary, advances and deductions are in Drivers & Staff → Driver Pay.</Text>
+          <View style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+            <Button label="Open Driver Pay" size="sm" variant="outline" icon={(c) => <IndianRupee size={13} color={c} />} onPress={() => router.push('/people?tab=driver-pay' as never)} />
+          </View>
         </View>
       </Card>
 

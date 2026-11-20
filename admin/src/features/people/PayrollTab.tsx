@@ -11,7 +11,7 @@ import { fetchPayouts, markPayoutPaid } from '../../services/people';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 import { CsvButton, FilterGroup, ListToolbar, Pager, SearchField, TotalRow, usePaged } from '../finance/tableTools';
 
-const KINDS = ['All', 'Staff', 'Drivers'] as const;
+const KINDS = ['All', 'Staff'] as const;
 const STATUS = ['All', 'Unpaid', 'Paid'] as const;
 const SORTS = ['Name', 'Net payable'] as const;
 
@@ -33,7 +33,7 @@ interface PayrollRow {
 export default function PayrollTab() {
   const styles = useThemedStyles(makeStyles);
   const { cols, isPhone } = useResponsive();
-  const { staffPunches, drivers, today, showToast } = useApp();
+  const { staffPunches, today, showToast } = useApp();
   const res = useResource(fetchPayouts);
   const [otRateText, setOtRateText] = useState('150');
   const [query, setQuery] = useState('');
@@ -67,25 +67,9 @@ export default function PayrollTab() {
         paidRef: payout?.txnRef,
       };
     });
-    const driverRows: PayrollRow[] = drivers.map((d) => {
-      const variable = Math.round((d.tripRevenueThisMonth * d.commissionPercent) / 100);
-      const payout = paid(d.id);
-      return {
-        id: d.id,
-        name: d.name,
-        role: `Chauffeur · ${d.commissionPercent}% commission`,
-        kind: 'Drivers',
-        base: d.monthlySalary,
-        variable,
-        otHours: 0,
-        otEstimate: 0,
-        deductions: 0,
-        net: payout?.amount ?? d.monthlySalary + variable,
-        paidRef: payout?.txnRef,
-      };
-    });
-    return [...staff, ...driverRows];
-  }, [staffPunches, drivers, safeRate, res.data, month]);
+    // Drivers are paid in the Driver Pay tab (salary, trip commission, advances, deductions)
+    return staff;
+  }, [staffPunches, safeRate, res.data, month]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -177,7 +161,7 @@ export default function PayrollTab() {
         <StatTile label="Overtime" value={`${all.reduce((s, r) => s + r.otHours, 0)} h`} hint={formatINR(all.reduce((s, r) => s + r.otEstimate, 0))} tone="info" icon={(c) => <Timer size={16} color={c} />} />
       </Grid>
 
-      <Section title="Salary summary" subtitle="September 2026 · net payable = base + allowance or commission + overtime estimate − deductions">
+      <Section title="Staff salary summary" subtitle="Net payable = base + allowance + overtime estimate − deductions. Drivers are paid in the Driver Pay tab.">
         <Card style={{ marginBottom: 12 }}>
           <View style={[{ flexDirection: 'row', gap: 16, alignItems: 'flex-start' }, isPhone && { flexDirection: 'column', alignItems: 'stretch' }]}>
             <View style={{ flex: 1, maxWidth: isPhone ? undefined : 260 }}>

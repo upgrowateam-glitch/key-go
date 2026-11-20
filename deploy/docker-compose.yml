@@ -49,6 +49,9 @@ services:
       # The phone app is not limited by this list. Every data route still needs a sign-in token.
       CORS_ORIGINS: https://${ADMIN_DOMAIN},https://${APP_DOMAIN},http://localhost:3000,http://localhost:8081
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      # Encrypts ID documents, face photos and Aadhaar numbers. Keep a copy outside the server (see backup/README.md)
+      DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-}
+      DATA_ENCRYPTION_OLD_KEYS: ${DATA_ENCRYPTION_OLD_KEYS:-}
       FILE_STORAGE_DIR: /app/storage
       # Live car locations from the traccar container (empty values = GPS pages say "not set up")
       TRACCAR_URL: http://127.0.0.1:4180

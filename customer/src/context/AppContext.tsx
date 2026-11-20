@@ -84,6 +84,8 @@ interface AppContextType {
   // Account
   customers: Customer[];
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  /** Fetches your profile again (document statuses change on the server). */
+  refreshMe: () => Promise<void>;
   addCustomer: (customer: Customer) => void;
   loyaltyTiers: LoyaltyRewardTier[];
 
@@ -364,6 +366,11 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
       });
   };
 
+  const refreshMe = async () => {
+    const ws = await api<{ customer: Customer }>('/me/workspace');
+    setCustomers((prev) => prev.map((c) => (c.id === ws.customer.id ? { ...c, ...ws.customer } : c)));
+  };
+
   const addCustomer = (customer: Customer) =>
     setCustomers((prev) => (prev.some((c) => c.id === customer.id) ? prev : [customer, ...prev]));
 
@@ -400,6 +407,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         toggleKeylessUnlock,
         extendRental,
         customers,
+        refreshMe,
         updateCustomer,
         addCustomer,
         loyaltyTiers: seed.loyaltyTiers,

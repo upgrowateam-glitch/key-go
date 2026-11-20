@@ -1,5 +1,6 @@
 import React, { ReactNode, useState } from 'react';
-import { Linking, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AppState, Linking, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { api } from '../../lib/api';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
@@ -136,17 +137,41 @@ function Summary({ items }: { items: { label: string; value: string; tone?: 'dan
 }
 
 /** Asks the customer to send a document to KeyGo on WhatsApp (staff verify it at the counter). */
-function SendOnWhatsApp({ what }: { what: string }) {
-  const { contact } = useContact();
-  const { me } = useMe();
-  if (!contact?.phone) return null;
+/**
+ * Opens a secure KeyGo page in the phone's browser for adding the ID card, licence and a selfie (camera or gallery,
+ * with crop and rotate). The page works for 30 minutes; statuses refresh when you come back to the app.
+ */
+function UploadDocumentsButton({ label = 'Upload documents' }: { label?: string }) {
+  const { refreshMe, showToast } = useMe();
+  const [busy, setBusy] = useState(false);
+  const opened = React.useRef(false);
+  React.useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && opened.current) {
+        opened.current = false;
+        refreshMe().catch(() => undefined);
+      }
+    });
+    return () => sub.remove();
+  }, [refreshMe]);
   return (
     <Button
-      label="Send on WhatsApp"
-      variant="outline"
+      label={busy ? 'Opening…' : label}
       size="sm"
-      icon={(c) => <MessageCircle size={14} color={c} />}
-      onPress={() => Linking.openURL(`https://wa.me/${phoneDigits(contact.phone)}?text=${encodeURIComponent(`Hi KeyGo, this is ${me.name} (${me.customerCode}). Sending my ${what} for verification.`)}`)}
+      disabled={busy}
+      icon={(c) => <FileText size={14} color={c} />}
+      onPress={async () => {
+        setBusy(true);
+        try {
+          const { url } = await api<{ url: string }>('/me/document-link', { method: 'POST' });
+          opened.current = true;
+          await Linking.openURL(url);
+        } catch (e) {
+          showToast((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+      }}
     />
   );
 }
@@ -425,7 +450,7 @@ function IdentityBody() {
         </View>
         {me.idCardStatus !== 'Verified' ? (
           <View style={{ marginTop: 12 }}>
-            <SendOnWhatsApp what="ID card" />
+            <UploadDocumentsButton label={me.idCardStatus === 'Not uploaded' ? 'Upload ID card' : me.idCardStatus === 'Rejected' ? 'Upload again' : 'Upload documents'} />
           </View>
         ) : null}
       </Card>
@@ -433,7 +458,7 @@ function IdentityBody() {
         <View style={styles.cardHead}>
           <View style={{ flex: 1 }}>
             <Text style={styles.itemTitle}>Face check</Text>
-            <Text style={styles.itemSub}>Your photo is matched with your ID at pickup</Text>
+            <Text style={styles.itemSub}>KeyGo staff compare your selfie (or counter photo) with your ID photo</Text>
           </View>
           <Badge label={me.faceVerification} tone={statusTone(me.faceVerification)} />
         </View>
@@ -447,7 +472,7 @@ function LicenceBody() {
   const { me, today } = useMe();
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const dl = me.documents.find((d) => d.kind === 'Driving licence');
+  const dlStatus = me.dlStatus ?? me.documents.find((d) => d.kind === 'Driving licence')?.status ?? 'Not uploaded';
   const expired = !!me.dlExpiry && me.dlExpiry < today;
   return (
     <Card>
@@ -457,12 +482,12 @@ function LicenceBody() {
           { label: 'Licence number', value: orDash(me.dlNumber) },
           { label: 'Issuing state', value: orDash(me.dlState) },
           { label: 'Valid till', value: me.dlExpiry ? <Text style={[styles.lineValue, expired && { color: colors.danger }]}>{formatDate(me.dlExpiry)}{expired ? ' · expired' : ''}</Text> : '—' },
-          { label: 'Verification', value: <Badge label={dl?.status ?? 'Not uploaded'} tone={statusTone(dl?.status ?? 'Not uploaded')} /> },
+          { label: 'Verification', value: <Badge label={dlStatus} tone={statusTone(dlStatus)} /> },
         ]}
       />
-      {dl?.status !== 'Verified' ? (
+      {dlStatus !== 'Verified' ? (
         <View style={{ marginTop: 12 }}>
-          <SendOnWhatsApp what="driving licence" />
+          <UploadDocumentsButton label={dlStatus === 'Rejected' ? 'Upload licence again' : 'Upload licence'} />
         </View>
       ) : null}
     </Card>
@@ -473,8 +498,33 @@ function DocumentsBody() {
   const { me } = useMe();
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
+  const kyc = me.kycStatus ?? 'Not verified';
+  const docs = me.identityDocs ?? [];
   return (
     <View style={{ gap: 12 }}>
+      <Card>
+        <View style={styles.cardHead}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemTitle}>{kyc === 'Verified' ? 'You are verified' : 'Verification'}</Text>
+            <Text style={styles.itemSub}>{kyc === 'Verified' ? 'Your documents are checked. You are ready for pickup.' : 'KeyGo checks your ID, licence and selfie before your first pickup.'}</Text>
+          </View>
+          <Badge label={kyc} tone={kyc === 'Verified' ? 'success' : kyc === 'Rejected' ? 'danger' : kyc === 'Pending' ? 'warning' : 'neutral'} />
+        </View>
+        {kyc !== 'Verified' && me.kycMissing?.length ? (
+          <View style={{ marginTop: 10, gap: 3 }}>
+            {me.kycMissing.map((m) => (
+              <Text key={m} style={styles.itemSub}>
+                • {m}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+        {kyc !== 'Verified' ? (
+          <View style={{ marginTop: 12 }}>
+            <UploadDocumentsButton />
+          </View>
+        ) : null}
+      </Card>
       <Card>
         <View style={styles.cardHead}>
           <View style={styles.photoCircle}>
@@ -487,24 +537,23 @@ function DocumentsBody() {
           <Badge label={me.photoCaptured ? 'On file' : 'Not taken'} tone={me.photoCaptured ? 'success' : 'neutral'} />
         </View>
       </Card>
-      {me.documents.length ? (
+      {docs.length ? (
         <List>
-          {me.documents.map((d) => (
+          {docs.map((d) => (
             <View key={d.id} style={styles.item}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.itemTitle}>{d.name}</Text>
-                <Text style={styles.itemSub}>
-                  {d.kind}
-                  {d.uploadedAt ? ` · added ${formatDate(d.uploadedAt)}` : ''}
-                </Text>
+                <Text style={styles.itemTitle}>{d.label}</Text>
+                <Text style={styles.itemSub}>Added {formatDate(d.uploadedAt.slice(0, 10))}</Text>
+                {d.status === 'Rejected' && d.rejectReason ? <Text style={[styles.itemSub, { color: colors.danger }]}>Please send again: {d.rejectReason}</Text> : null}
               </View>
               <Badge label={d.status} tone={statusTone(d.status)} />
             </View>
           ))}
         </List>
       ) : (
-        <Empty title="No documents on file" message="Share your ID, driving licence and address proof with KeyGo before your first pickup." icon={(c) => <FileText size={22} color={c} />} action={<SendOnWhatsApp what="documents" />} />
+        <Empty title="No documents on file" message="Add your ID card, driving licence and a selfie. It takes about two minutes." icon={(c) => <FileText size={22} color={c} />} action={<UploadDocumentsButton />} />
       )}
+      <Text style={styles.note}>Your documents are encrypted. Only KeyGo managers can open them, and every opening is recorded.</Text>
     </View>
   );
 }

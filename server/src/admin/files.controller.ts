@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Delete, Get, HttpCode, NotFoundException, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Controller, Delete, ForbiddenException, Get, HttpCode, NotFoundException, Param, Post, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -6,13 +6,17 @@ import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { CurrentUser, StaffOnly, type AuthPayload } from '../auth/auth.decorators';
+import { Can, CurrentUser, StaffOnly, type AuthPayload } from '../auth/auth.decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
 const ALLOWED = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
 const MAX_BYTES = 10 * 1024 * 1024;
 
-/** Uploaded documents (vehicle papers and similar). Files are kept on disk under FILE_STORAGE_DIR. */
+/**
+ * Uploaded vehicle papers and car photos, kept on disk under FILE_STORAGE_DIR. For people who manage the fleet.
+ * Identity documents (ID cards, licences, face photos) are never served here: they are encrypted and opened only
+ * through /admin/identity, which checks access and records every opening.
+ */
 @ApiTags('admin')
 @ApiBearerAuth()
 @StaffOnly()
@@ -28,6 +32,7 @@ export class FilesController {
   }
 
   @Post()
+  @Can('fleet', 'edit')
   @ApiConsumes('multipart/form-data')
   @ApiOperation({ summary: 'Upload one file (PDF, JPG, PNG or WebP, up to 10 MB) in the "file" field' })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_BYTES } }))
@@ -47,20 +52,24 @@ export class FilesController {
 
   @Delete(':id')
   @HttpCode(204)
+  @Can('fleet', 'edit')
   @ApiOperation({ summary: 'Delete a stored file' })
   async remove(@Param('id') id: string) {
     const file = await this.prisma.storedFile.findUnique({ where: { id } });
     if (!file) return;
+    if (file.category === 'identity') throw new ForbiddenException('Identity documents are removed from the customer or driver page.');
     await this.prisma.storedFile.delete({ where: { id } });
     rmSync(join(this.root, file.path), { force: true });
   }
 
   @Get(':id')
+  @Can('fleet', 'view')
   @ApiOperation({ summary: 'Download a stored file' })
   async download(@Param('id') id: string, @Res() res: Response) {
     const file = await this.prisma.storedFile.findUnique({ where: { id } });
     const full = file && join(this.root, file.path);
     if (!file || !full || !existsSync(full)) throw new NotFoundException('File not found.');
+    if (file.category === 'identity' || file.encrypted) throw new ForbiddenException('Open identity documents from the customer or driver page.');
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`);
     createReadStream(full).pipe(res);

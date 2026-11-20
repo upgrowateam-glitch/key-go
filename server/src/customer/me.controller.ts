@@ -10,6 +10,9 @@ import { CUSTOMER_SELF_EDITABLE, bookingToApi, currentRate, customerFromApi, cus
 import { computeQuote, type Term } from '../domain/pricing';
 import { StoreService } from '../domain/store.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { normaliseLicence } from '../domain/licence';
+import { actorOf } from '../identity/audit.service';
+import { IdentityService } from '../identity/identity.service';
 
 class CreateBookingDto {
   /** Optional id chosen by the app, so it can show the booking before the server answers. */
@@ -47,7 +50,13 @@ export class MeController {
     private readonly prisma: PrismaService,
     private readonly store: StoreService,
     private readonly bookings: BookingsService,
+    private readonly identity: IdentityService,
   ) {}
+
+  /** The customer's own documents (status only; staff names left out). */
+  private docs(me: AuthPayload) {
+    return this.prisma.identityDocument.findMany({ where: { ownerType: 'customer', ownerId: me.sub }, orderBy: { createdAt: 'asc' } });
+  }
 
   private async ownBooking(me: AuthPayload, id: string) {
     const b = await this.bookings.getBooking(id);
@@ -80,7 +89,7 @@ export class MeController {
       this.store.listWhere('notifications', (n) => n.customerId === me.sub),
     ]);
     return {
-      customer: customerToApi(customer),
+      customer: customerToApi(customer, await this.docs(me), { forCustomer: true }),
       vehicles,
       bookings,
       agreements,
@@ -97,13 +106,25 @@ export class MeController {
   @Patch()
   @ApiOperation({ summary: 'Update own profile' })
   async updateProfile(@CurrentUser() me: AuthPayload, @Body() body: Json) {
-    const current = customerToApi(await this.profile(me));
-    const allowed = Object.fromEntries(Object.entries(body).filter(([k]) => (CUSTOMER_SELF_EDITABLE as readonly string[]).includes(k)));
+    const before = await this.profile(me);
+    const current = customerToApi(before);
+    const allowed: Json = Object.fromEntries(Object.entries(body).filter(([k]) => (CUSTOMER_SELF_EDITABLE as readonly string[]).includes(k)));
+    // A new licence number must be a valid Indian licence number
+    const rawDl = typeof allowed.dlNumber === 'string' ? allowed.dlNumber.trim() : '';
+    if (rawDl && rawDl.replace(/[^A-Z0-9]/gi, '').toUpperCase() !== (before.dlNumber ?? '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) {
+      const licence = normaliseLicence(rawDl);
+      allowed.dlNumber = licence.number;
+      if (!allowed.dlState) allowed.dlState = licence.state;
+    }
     const data = customerFromApi({ ...current, ...allowed });
     // Verification states, tier, points and rating are managed by KeyGo staff
     for (const k of ['idCardStatus', 'faceVerification', 'loyaltyTier', 'loyaltyPoints', 'trustRating', 'customerCode', 'email', 'createdAt'] as const) delete data[k];
     try {
-      return customerToApi(await this.prisma.customer.update({ where: { id: me.sub }, data }));
+      const saved = await this.prisma.customer.update({ where: { id: me.sub }, data });
+      if ((before.dlNumber ?? '') !== (saved.dlNumber ?? '') || (before.dlExpiry?.getTime() ?? 0) !== (saved.dlExpiry?.getTime() ?? 0)) {
+        await this.identity.licenceChanged(me.sub, actorOf(me), { changedBy: 'customer', dlExpiry: saved.dlExpiry?.toISOString().slice(0, 10) });
+      }
+      return customerToApi(saved, await this.docs(me), { forCustomer: true });
     } catch (e) {
       rethrowDbError(e, { phone: 'phone number' });
     }

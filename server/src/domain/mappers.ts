@@ -1,7 +1,8 @@
 import { BadRequestException } from '@nestjs/common';
-import type { Booking, Customer, Prisma, Vehicle, VehicleRate } from '@prisma/client';
+import type { Booking, Customer, IdentityDocument, Prisma, Vehicle, VehicleRate } from '@prisma/client';
 import { decrypt, encrypt, maskAadhaar } from '../common/crypto';
-import { clockLabel, dateOnly, dateTime, isIsoDate, isoDate } from '../common/dates';
+import { clockLabel, dateOnly, dateTime, isIsoDate, isoDate, todayIst } from '../common/dates';
+import { documentToApi, kycStatus, paperStatus } from '../identity/identity-status';
 import {
   bookingStatusEnum,
   classificationEnum,
@@ -293,19 +294,47 @@ export function bookingFromApi(body: Json): Omit<Prisma.BookingUncheckedCreateIn
 
 // ---------------------------------------------------------------- Customers
 
+export type IdentityDocWithFile = IdentityDocument & { file?: { mimeType: string } | null };
+
+const LEGACY_KIND: Record<string, string> = {
+  photo: 'Photo',
+  selfie: 'Photo',
+  id_front: 'ID card',
+  id_back: 'ID card',
+  dl_front: 'Driving licence',
+  dl_back: 'Driving licence',
+  address_proof: 'Address proof',
+};
+
 const CUSTOMER_KEYS = [
   'id', 'name', 'firstName', 'lastName', 'dob', 'phone', 'email', 'address', 'city', 'aadhaarNo', 'idCardStatus', 'faceVerification',
   'dlNumber', 'dlState', 'dlExpiry', 'careOfName', 'careOfRelation', 'careOfPhone', 'customerCode', 'customerSince', 'loyaltyTier',
   'loyaltyPoints', 'trustRating', 'password',
+  // Worked out by the server from the identity documents; never saved from the apps
+  'documents', 'photoCaptured', 'identityDocs', 'kycStatus', 'kycMissing', 'dlStatus', 'dlExpired',
 ] as const;
 
-export function customerToApi(c: Customer): Json {
+/**
+ * A customer for the apps. Documents, the licence status and the overall verification status come from the
+ * identity documents (pass them in; without them the customer shows no documents).
+ */
+export function customerToApi(c: Customer, docs: IdentityDocWithFile[] = [], opts: { forCustomer?: boolean } = {}): Json {
   const d = asObject(c.details);
+  const { documents: _old, photoCaptured: _flag, ...rest } = d;
+  const dlStatus = paperStatus(docs, 'dl_front', 'dl_back');
+  const kyc = kycStatus({ idCard: c.idCardStatus, licence: dlStatus, face: c.faceVerification, dlExpiry: c.dlExpiry, today: todayIst() });
+  const identityDocs = docs.map((x) => documentToApi(x, opts));
   return {
-    documents: [],
-    photoCaptured: false,
     avatarBg: '#DCE8DE',
-    ...d,
+    ...rest,
+    identityDocs,
+    // Older screens read these two
+    documents: identityDocs.map((x) => ({ id: x.id, name: x.label, kind: LEGACY_KIND[x.kind] ?? 'Other', status: x.status, uploadedAt: x.uploadedAt.slice(0, 10) })),
+    photoCaptured: docs.some((x) => x.kind === 'photo' || x.kind === 'selfie'),
+    dlStatus: verificationEnum.fromDb(dlStatus),
+    dlExpired: !!c.dlExpiry && isoDate(c.dlExpiry) < todayIst(),
+    kycStatus: kyc.status,
+    kycMissing: kyc.missing,
     id: c.id,
     name: `${c.firstName} ${c.lastName}`.trim(),
     firstName: c.firstName,
@@ -336,7 +365,7 @@ export const normaliseEmail = (v: unknown) => optStr(v)?.toLowerCase() ?? null;
 export const normalisePhone = (v: unknown) => optStr(v)?.replace(/[\s-]/g, '') ?? null;
 
 /** Fields a customer may change on their own profile in the app. */
-export const CUSTOMER_SELF_EDITABLE = ['firstName', 'lastName', 'dob', 'phone', 'address', 'city', 'dlNumber', 'dlState', 'dlExpiry', 'careOfName', 'careOfRelation', 'careOfPhone', 'documents', 'photoCaptured', 'aadhaarNo'] as const;
+export const CUSTOMER_SELF_EDITABLE = ['firstName', 'lastName', 'dob', 'phone', 'address', 'city', 'dlNumber', 'dlState', 'dlExpiry', 'careOfName', 'careOfRelation', 'careOfPhone', 'aadhaarNo'] as const;
 
 export function customerFromApi(body: Json): Omit<Prisma.CustomerUncheckedCreateInput, 'id'> {
   return mapped('customer', () => {

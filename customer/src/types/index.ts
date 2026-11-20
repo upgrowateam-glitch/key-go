@@ -181,6 +181,13 @@ export interface Customer {
   careOfPhone: string;
   customerCode: string; // Commission referral code
   documents: CustomerDocument[];
+  /** Documents KeyGo has on file (status only). */
+  identityDocs?: { id: string; kind: string; label: string; status: VerificationStatus; uploadedAt: string; rejectReason?: string }[];
+  /** Driving licence status (front and back). */
+  dlStatus?: VerificationStatus;
+  /** Verified = ID and licence verified, licence valid, face matched. */
+  kycStatus?: 'Verified' | 'Pending' | 'Rejected' | 'Not verified';
+  kycMissing?: string[];
   customerSince: string;
   loyaltyTier: 'Bronze' | 'Silver' | 'Gold' | 'VIP';
   loyaltyPoints: number;

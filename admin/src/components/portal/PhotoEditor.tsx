@@ -63,13 +63,26 @@ async function render(src: string, rotation: number, area: Area, name: string): 
  * Full-screen crop and rotate step shown after a photo is chosen or taken (on the computer and on the phone).
  * Resolves with the edited JPG through onDone; nothing is uploaded on Cancel.
  */
-export function PhotoEditor({ file, title, onCancel, onDone }: { file: File; title: string; onCancel: () => void; onDone: (edited: File) => void | Promise<void> }) {
+export function PhotoEditor({
+  file,
+  title,
+  defaultShape = 'app',
+  onCancel,
+  onDone,
+}: {
+  file: File;
+  title: string;
+  /** Car photos start on "Fits the app"; documents on the photo's own shape. */
+  defaultShape?: ShapeKey;
+  onCancel: () => void;
+  onDone: (edited: File) => void | Promise<void>;
+}) {
   const [src, setSrc] = useState('');
   const [natural, setNatural] = useState({ w: 4, h: 3 });
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
-  const [shape, setShape] = useState<ShapeKey>('app');
+  const [shape, setShape] = useState<ShapeKey>(defaultShape);
   const [area, setArea] = useState<Area | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

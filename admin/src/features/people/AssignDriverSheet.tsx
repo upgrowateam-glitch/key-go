@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { daysBetween, formatDate } from '../../lib/format';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import type { Booking, Driver } from '../../types';
+import { leaveDuring } from './availability';
 
 /** Licences expiring within this many days are flagged. */
 const LICENCE_WARN_DAYS = 90;
@@ -50,6 +51,9 @@ export function AssignDriverSheet({ driverId, bookingId, onClose }: { driverId?:
   const fixedDriver = !!driverId;
 
   const licenceExpired = driver ? daysBetween(today, driver.licenseExpiry) < 0 : false;
+  // The licence must stay valid until the trip ends, and the driver must not be on leave
+  const licenceEndsEarly = driver && booking && !licenceExpired ? driver.licenseExpiry < booking.returnDate : false;
+  const leave = driver && booking ? leaveDuring(driver, booking.pickupDate, booking.returnDate) : undefined;
   const clash = driver && booking ? findClash(driver, booking, bookings) : undefined;
   const error = !booking
     ? 'Choose a booking'
@@ -57,7 +61,11 @@ export function AssignDriverSheet({ driverId, bookingId, onClose }: { driverId?:
       ? 'Choose a driver'
       : licenceExpired
         ? `${driver.name}'s licence has expired, so this driver cannot be assigned.`
-        : clash
+        : licenceEndsEarly
+          ? `${driver.name}'s licence expires on ${formatDate(driver.licenseExpiry)}, before this trip ends.`
+          : leave
+            ? `${driver.name} is on leave from ${formatDate(leave.from)} to ${formatDate(leave.to)}.`
+            : clash
           ? `${driver.name} is already on ${clash.bookingId} during these dates.`
           : undefined;
 

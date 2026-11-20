@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button, Field, FormRow, FormSheet } from '../../components/kit';
 import { useApp } from '../../context/AppContext';
+import { checkLicence } from '../../lib/licence';
 import type { Driver } from '../../types';
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -22,7 +23,10 @@ export function DriverForm({ driver, onClose, onSaved }: { driver?: Driver; onCl
   const [touched, setTouched] = useState(false);
   const set = (k: keyof typeof f) => (v: string) => setF((p) => ({ ...p, [k]: v }));
 
-  const lic = (s: string) => s.replace(/\s+/g, '').toUpperCase();
+  const lic = (s: string) => s.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  // Numbers already on file are left alone; new or changed ones must be in the standard format
+  const licenceUnchanged = !!driver && lic(driver.licenseNo) === lic(f.licenseNo);
+  const licence = checkLicence(f.licenseNo);
   const errors = {
     name: !f.name.trim() ? 'Enter the driver’s name' : undefined,
     phone: !PHONE.test(f.phone.trim()) ? 'Enter a valid phone number' : undefined,
@@ -30,7 +34,9 @@ export function DriverForm({ driver, onClose, onSaved }: { driver?: Driver; onCl
       ? 'Enter the licence number'
       : drivers.some((d) => d.id !== driver?.id && lic(d.licenseNo) === lic(f.licenseNo))
         ? 'Another driver has this licence number'
-        : undefined,
+        : !licenceUnchanged && 'error' in licence
+          ? licence.error
+          : undefined,
     licenseState: !f.licenseState.trim() ? 'Enter the state' : undefined,
     licenseExpiry: !ISO.test(f.licenseExpiry) ? 'Use YYYY-MM-DD' : undefined,
     joinedOn: !ISO.test(f.joinedOn) ? 'Use YYYY-MM-DD' : undefined,
@@ -46,7 +52,7 @@ export function DriverForm({ driver, onClose, onSaved }: { driver?: Driver; onCl
     const fields = {
       name: f.name.trim(),
       phone: f.phone.trim(),
-      licenseNo: f.licenseNo.trim().toUpperCase(),
+      licenseNo: !licenceUnchanged && 'number' in licence ? licence.number : f.licenseNo.trim().toUpperCase(),
       licenseState: f.licenseState.trim(),
       licenseExpiry: f.licenseExpiry,
       joinedOn: f.joinedOn,
@@ -92,7 +98,11 @@ export function DriverForm({ driver, onClose, onSaved }: { driver?: Driver; onCl
         <Field label="Phone" required value={f.phone} onChangeText={set('phone')} keyboardType="phone-pad" placeholder="+91 98765 43210" error={err('phone')} />
       </FormRow>
       <FormRow>
-        <Field label="Driving licence number" required value={f.licenseNo} onChangeText={set('licenseNo')} placeholder="e.g. KL13 20190012345" error={err('licenseNo')} />
+        <Field label="Driving licence number" required value={f.licenseNo} onChangeText={(v) => {
+            set('licenseNo')(v);
+            const ok = checkLicence(v);
+            if ('state' in ok && !f.licenseState.trim()) set('licenseState')(ok.state);
+          }} placeholder="e.g. KL13 20190012345" error={err('licenseNo')} />
         <Field label="Licence state" required value={f.licenseState} onChangeText={set('licenseState')} placeholder="e.g. Kerala" error={err('licenseState')} />
       </FormRow>
       <FormRow>

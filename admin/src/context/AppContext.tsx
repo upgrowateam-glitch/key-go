@@ -126,6 +126,7 @@ interface AppContextType {
   customers: Customer[];
   addCustomer: (cust: Customer) => void;
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  showCustomer: (c: Customer) => void;
 
   // Agreements & Inspections
   agreements: Agreement[];
@@ -258,7 +259,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   });
   const [bookingDraft, setBookingDraft] = useState<BookingDraft>(defaultDraft);
 
-  const [customers, setCustomers] = useSyncedList<Customer>(seed.customers, {
+  const [customers, setCustomers, customersRef, setCustomersLocal] = useSyncedList<Customer>(seed.customers, {
     keyOf: (c) => c.id,
     save: (c) => api(`/admin/customers/${enc(c.id)}`, { method: 'PUT', body: c }),
     onError: onSaveError,
@@ -534,6 +535,9 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
     showToast(`Customer ${cust.name} added`);
   };
 
+  /** Shows the server's copy of a customer (after document checks) without saving it again. */
+  const showCustomer = (c: Customer) => setCustomersLocal(customersRef.current.map((x) => (x.id === c.id ? { ...x, ...c } : x)));
+
   const updateCustomer = (id: string, patch: Partial<Customer>) =>
     setCustomers((prev) =>
       prev.map((c) => {
@@ -695,6 +699,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         customers,
         addCustomer,
         updateCustomer,
+        showCustomer,
         agreements,
         inspections,
         addInspection,

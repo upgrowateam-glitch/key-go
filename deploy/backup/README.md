@@ -114,3 +114,30 @@ rclone copy keygo-backup:files "$(docker volume inspect -f '{{ .Mountpoint }}' k
 ```
 
 Never use `docker compose down -v` — the `-v` deletes KeyGo's data volumes.
+
+**Then check the identity documents open:**
+
+```bash
+docker exec keygo-api npm run keys:verify
+```
+
+It should end with "Everything opens." If it says a key is missing, see the next section.
+
+## The encryption key (read this once)
+
+ID cards, licences, face photos and Aadhaar numbers are encrypted by the KeyGo server with `DATA_ENCRYPTION_KEY`
+(in `/opt/keygo/deploy/.env`). The backups contain the encrypted files and the database, **but not this key** —
+on purpose, so a stolen backup cannot be read. That means:
+
+- **Keep a copy of `DATA_ENCRYPTION_KEY` outside the server**: in a password manager, and/or written on paper kept
+  safe. Also keep the rclone encryption passwords from step 3 the same way.
+- **To restore** on this or a new server: restore the database and files (above), put the same
+  `DATA_ENCRYPTION_KEY` in `.env`, start KeyGo, then run `docker exec keygo-api npm run keys:verify`.
+- **Never just change the key.** To replace it: put the old key in `DATA_ENCRYPTION_OLD_KEYS=` (comma separated if
+  there are several), the new one in `DATA_ENCRYPTION_KEY=`, then `docker compose up -d api`. On start-up the
+  server re-encrypts everything with the new key. Run `keys:verify`; once it says "Everything opens" and the new
+  key is safely stored, the old key can be removed from `DATA_ENCRYPTION_OLD_KEYS`.
+- Every encrypted item records a short fingerprint of the key that made it (e.g. `3f9a12bc04`), so `keys:verify`
+  and the server log say exactly which key is needed. The fingerprint does not reveal the key.
+- If the server starts with the wrong key, it does not lose anything: it refuses to open or add identity documents
+  and logs which key it needs, until the right key is back.

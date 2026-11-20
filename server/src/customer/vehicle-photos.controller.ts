@@ -32,7 +32,7 @@ export class VehiclePhotosController {
     if (!Object.values(photos).includes(fileId)) throw new NotFoundException('Photo not found.');
     const file = await this.prisma.storedFile.findUnique({ where: { id: fileId } });
     const full = file && join(this.root, file.path);
-    if (!file || !IMAGE_TYPES.includes(file.mimeType) || !full || !existsSync(full)) throw new NotFoundException('Photo not found.');
+    if (!file || file.category !== 'general' || file.encrypted || !IMAGE_TYPES.includes(file.mimeType) || !full || !existsSync(full)) throw new NotFoundException('Photo not found.');
     res.setHeader('Content-Type', file.mimeType);
     // The file id changes when a photo is replaced, so the image can be cached for a long time
     res.setHeader('Cache-Control', 'public, max-age=604800, immutable');

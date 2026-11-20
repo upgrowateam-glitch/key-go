@@ -41,6 +41,9 @@ export function statusTone(status: string): Tone {
     case 'return':
     case 'half day':
     case 'leave':
+    case 'on leave':
+    case 'finalised':
+    case 'open':
       return 'warning';
     case 'sold':
     case 'cancelled':

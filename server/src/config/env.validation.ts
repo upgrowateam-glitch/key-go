@@ -22,10 +22,19 @@ class Env {
   @IsString()
   JWT_ACCESS_TTL?: string;
 
-  /** Encrypts Aadhaar numbers at rest. Defaults to JWT_ACCESS_SECRET; keep it stable once set. */
+  /**
+   * Encrypts identity data (Aadhaar numbers, ID documents, face photos). At least 32 characters. Keep a copy
+   * somewhere safe outside the server: without it, encrypted documents cannot be opened after a restore.
+   */
   @IsOptional()
   @IsString()
+  @MinLength(32, { message: 'DATA_ENCRYPTION_KEY must be at least 32 characters (use: openssl rand -base64 48)' })
   DATA_ENCRYPTION_KEY?: string;
+
+  /** Earlier encryption keys, comma separated, kept only to read data from before a key change. */
+  @IsOptional()
+  @IsString()
+  DATA_ENCRYPTION_OLD_KEYS?: string;
 
   @IsOptional()
   @IsString()

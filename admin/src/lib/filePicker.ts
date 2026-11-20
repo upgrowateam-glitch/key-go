@@ -1,5 +1,5 @@
 /** Opens the browser's file dialog and resolves with the chosen file, or null when the dialog is dismissed. */
-export function pickFile(accept: string, capture?: 'environment'): Promise<File | null> {
+export function pickFile(accept: string, capture?: 'environment' | 'user'): Promise<File | null> {
   return new Promise((resolve) => {
     if (typeof document === 'undefined') {
       resolve(null);

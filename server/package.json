@@ -14,7 +14,8 @@
     "prisma:studio": "prisma studio",
     "db:seed": "ts-node --transpile-only prisma/seed.ts",
     "db:remove-sample": "ts-node --transpile-only prisma/remove-sample-data.ts",
-    "create-owner": "ts-node --transpile-only prisma/create-owner.ts"
+    "create-owner": "ts-node --transpile-only prisma/create-owner.ts",
+    "keys:verify": "ts-node --transpile-only prisma/verify-encryption.ts"
   },
   "prisma": {
     "seed": "ts-node --transpile-only prisma/seed.ts"

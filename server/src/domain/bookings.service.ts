@@ -2,7 +2,7 @@ import { BadRequestException, ConflictException, Injectable, Logger, NotFoundExc
 import type { Prisma } from '@prisma/client';
 import { rethrowDbError } from '../common/prisma-errors';
 import { PrismaService } from '../prisma/prisma.service';
-import { todayIst } from '../common/dates';
+import { isIsoDate, isoDate, todayIst } from '../common/dates';
 import { pricingRules, SETTING_PRICING, type PricingRules } from './catalog';
 import { codeNumber, normaliseRegistration, vehicleCode } from './vehicle-rules';
 import { bookingFromApi, bookingToApi, currentRate, ratesToApi, vehicleFromApi, vehicleToApi, type Json } from './mappers';
@@ -167,6 +167,7 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   /** Creates or replaces a booking. Overlapping confirmed/active bookings are rejected with 409. */
   async saveBooking(id: string, body: Json) {
     const data = bookingFromApi(body);
+    await this.checkDriver(id, data);
     const previous = await this.prisma.booking.findUnique({ where: { id }, select: { vehicleId: true } });
     try {
       const saved = await this.prisma.booking.upsert({ where: { id }, create: { ...data, id }, update: data });
@@ -177,6 +178,36 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     } catch (e) {
       rethrowDbError(e);
     }
+  }
+
+  /**
+   * A driver on a confirmed or active booking must be free for those dates, not on leave, and hold a licence
+   * valid until the trip ends. Checked when the driver, the dates or the status change.
+   */
+  private async checkDriver(id: string, input: { pickupAt: Date | string; returnAt: Date | string; status?: unknown; details?: unknown }) {
+    const data = { ...input, pickupAt: new Date(input.pickupAt), returnAt: new Date(input.returnAt) };
+    const holds = (st: unknown) => st === 'CONFIRMED' || st === 'ACTIVE';
+    const driverOf = (details: unknown) => (details && typeof details === 'object' ? ((details as Json).driverId as string | undefined) : undefined);
+    const driverId = driverOf(data.details);
+    if (!driverId || !holds(data.status)) return;
+    const prev = await this.prisma.booking.findUnique({ where: { id }, select: { pickupAt: true, returnAt: true, status: true, details: true } });
+    if (prev && holds(prev.status) && driverOf(prev.details) === driverId && prev.pickupAt.getTime() === data.pickupAt.getTime() && prev.returnAt.getTime() === data.returnAt.getTime()) return;
+
+    const rec = await this.prisma.appRecord.findUnique({ where: { collection_id: { collection: 'drivers', id: driverId } } });
+    if (!rec) throw new BadRequestException('The chosen driver does not exist.');
+    const d = rec.data as Json;
+    const name = String(d.name ?? 'This driver');
+    const from = isoDate(data.pickupAt);
+    const to = isoDate(data.returnAt);
+    const expiry = d.licenseExpiry;
+    if (isIsoDate(expiry) && expiry < to) throw new ConflictException(`${name}'s driving licence ${expiry < todayIst() ? 'has expired' : `expires on ${expiry}, before this trip ends`}. Choose another driver.`);
+    const leave = (Array.isArray(d.leaves) ? (d.leaves as Json[]) : []).find((l) => isIsoDate(l.from) && isIsoDate(l.to) && (l.from as string) <= to && (l.to as string) >= from);
+    if (leave) throw new ConflictException(`${name} is on leave from ${leave.from} to ${leave.to}. Choose another driver.`);
+    const clash = await this.prisma.booking.findFirst({
+      where: { id: { not: id }, status: { in: ['CONFIRMED', 'ACTIVE'] }, pickupAt: { lt: data.returnAt }, returnAt: { gt: data.pickupAt }, details: { path: ['driverId'], equals: driverId } },
+      select: { id: true },
+    });
+    if (clash) throw new ConflictException(`${name} is already driving booking ${clash.id} at that time. Choose another driver.`);
   }
 
   /** Applies changes to a stored booking (columns and display fields) and saves it through the same rules. */

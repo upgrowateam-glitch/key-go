@@ -206,6 +206,33 @@ export interface Customer {
   loyaltyPoints: number;
   avatarBg: string;
   trustRating: number;
+  /** Real documents on file (from the server; never the files themselves). */
+  identityDocs?: IdentityDoc[];
+  /** Licence document status (front and back). */
+  dlStatus?: VerificationStatus;
+  dlExpired?: boolean;
+  /** Overall: ID and licence verified, licence valid, face matched. */
+  kycStatus?: KycStatus;
+  /** What is still needed before the customer is Verified. */
+  kycMissing?: string[];
+}
+
+export type KycStatus = 'Verified' | 'Pending' | 'Rejected' | 'Not verified';
+
+/** An identity document on file for a customer or driver. */
+export interface IdentityDoc {
+  id: string;
+  kind: string;
+  label: string;
+  status: VerificationStatus;
+  uploadedAt: string;
+  rejectReason?: string;
+  mimeType?: string;
+  uploadedBy?: string;
+  /** staff, staff-phone or customer-link */
+  uploadedVia?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 export interface AgreementFine {
@@ -326,6 +353,13 @@ export interface DriverAssignment {
   status: 'Upcoming' | 'In progress' | 'Completed';
 }
 
+export interface DriverLeave {
+  id: string;
+  from: string;
+  to: string;
+  note?: string;
+}
+
 export interface Driver {
   id: string;
   name: string;
@@ -334,6 +368,8 @@ export interface Driver {
   licenseState: string;
   licenseExpiry: string;
   dutyStatus: 'On Duty' | 'Off Duty' | 'On Trip';
+  /** Leave and days off; a driver on leave cannot be assigned for those dates. */
+  leaves?: DriverLeave[];
   assignedVehicle?: string;
   rating: number;
   joinedOn: string;

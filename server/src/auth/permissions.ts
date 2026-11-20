@@ -11,6 +11,7 @@ export const AREAS = [
   'fleet',
   'bookings',
   'customers',
+  'identity',
   'agreements',
   'inspections',
   'maintenance',
@@ -33,6 +34,7 @@ export const AREA_LABELS: Record<Area, string> = {
   fleet: 'Vehicles & documents',
   bookings: 'Bookings & quotes',
   customers: 'Customers',
+  identity: 'ID documents & face check',
   agreements: 'Rental agreements',
   inspections: 'Vehicle inspections',
   maintenance: 'Maintenance',
@@ -60,6 +62,7 @@ export const DEFAULT_PERMISSIONS: Record<StaffRoleLabel, PermissionMap> = {
     settings: 'view',
     users: 'none',
   },
+  // Staff can upload a customer's documents and see their status, but not open them or decide on them
   Staff: {
     ...all('none'),
     dashboard: 'view',
@@ -120,6 +123,9 @@ const COLLECTION_AREA: Record<string, Area> = {
   inspections: 'inspections',
   staffPunches: 'people',
   drivers: 'people',
+  driverPayEntries: 'people',
+  driverSalaries: 'people',
+  driverPayslips: 'people',
   fastagLogs: 'fastag',
   maintenanceLogs: 'maintenance',
   maintenanceReminders: 'maintenance',

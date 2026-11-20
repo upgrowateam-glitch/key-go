@@ -131,7 +131,7 @@ function Profile({ id }: { id: string }) {
     <View>
       <PageTabs tabs={TAB_LABELS} value={active.label} onChange={changeTab} />
       {active.slug === 'overview' ? <OverviewTab customer={customer} /> : null}
-      {active.slug === 'documents' ? <DocumentsTab customer={customer} applyChange={applyChange} /> : null}
+      {active.slug === 'documents' ? <DocumentsTab customer={customer} /> : null}
       {active.slug === 'bookings' ? <BookingsTab customer={customer} history={history} stats={stats} /> : null}
       {active.slug === 'payments' ? <PaymentsTab history={history} /> : null}
       {active.slug === 'agreements' ? <AgreementsTab history={history} /> : null}

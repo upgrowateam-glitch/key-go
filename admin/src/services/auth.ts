@@ -9,6 +9,7 @@ export type Area =
   | 'fleet'
   | 'bookings'
   | 'customers'
+  | 'identity'
   | 'agreements'
   | 'inspections'
   | 'maintenance'
