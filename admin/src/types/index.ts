@@ -86,6 +86,17 @@ export interface Vehicle {
   customRates?: { weekly?: number; monthly?: number; deposit?: number };
   /** Office the car belongs to (a name from Settings → Branches). */
   branch?: string;
+  /** Readable fleet code given by the server, e.g. KG-V-0007. */
+  code?: string;
+  /** Uploaded photos by position (front, back, left, right, interior, dashboard) → stored file id. */
+  photos?: Record<string, string>;
+  /** Which photo customers see first (a key of `photos`). */
+  mainPhoto?: string;
+  /** Path of the main photo on the server (/public/vehicles/:id/photos/:fileId). */
+  mainPhotoPath?: string;
+  /** GPS company and the SIM in the device (the device id is `gpsDeviceId`). */
+  gpsProvider?: string;
+  gpsSim?: string;
   imageAsset?: any;
   /** Attribution for `imageAsset` (real photos are Creative Commons licensed and must be credited). */
   photoCredit?: PhotoCredit;

@@ -16,7 +16,7 @@ export function OverviewTab({ v, category }: { v: Vehicle; category: VehicleCate
         <Text style={styles.cardTitle}>Vehicle details</Text>
         <KeyValueGrid
           items={[
-            { label: 'Vehicle ID', value: v.id },
+            { label: 'Vehicle ID', value: v.code ?? v.id },
             { label: 'Registration number', value: v.vehicleNumber },
             { label: 'Type', value: v.type },
             { label: 'Category', value: category },

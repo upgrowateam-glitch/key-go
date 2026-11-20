@@ -1,6 +1,6 @@
 import { FLEET_PHOTOS } from '../data/fleetPhotos';
 import { applyPricingRules } from '../lib/pricing';
-import { api } from '../lib/api';
+import { api, API_URL } from '../lib/api';
 import type { Agreement, AgreementFine, Booking, Customer, FASTagLog, InspectionRecord, LoyaltyRewardTier, NotificationItem, Vehicle } from '../types';
 
 export interface Workspace {
@@ -18,7 +18,9 @@ export interface Workspace {
   pricing?: { taxRate: number; termDiscount: Record<string, number>; minDays: Record<string, number> };
 }
 
-export const withPhoto = (v: Vehicle): Vehicle => (v.photoKey && FLEET_PHOTOS[v.photoKey] ? { ...v, imageAsset: FLEET_PHOTOS[v.photoKey] } : v);
+/** The car's own main photo uploaded by KeyGo, else the standard picture shipped with the app. */
+export const withPhoto = (v: Vehicle): Vehicle =>
+  v.mainPhotoPath ? { ...v, imageAsset: { uri: `${API_URL}${v.mainPhotoPath}` } } : v.photoKey && FLEET_PHOTOS[v.photoKey] ? { ...v, imageAsset: FLEET_PHOTOS[v.photoKey] } : v;
 
 /** Everything the app shows for the signed-in customer, loaded from the KeyGo server. */
 export async function loadWorkspace(): Promise<Workspace> {

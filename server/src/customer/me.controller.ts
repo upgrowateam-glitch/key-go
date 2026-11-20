@@ -167,7 +167,6 @@ export class MeController {
       ...(b.paymentStatus === 'UNPAID' ? { paymentStatus: 'Deposit paid' } : {}),
     });
     const vehicle = await this.bookings.vehicleWithRates(b.vehicleId);
-    if (vehicle.status === 'AVAILABLE') await this.bookings.setVehicleStatus(b.vehicleId, 'RESERVED');
     await this.store.notify({ type: 'booking', title: 'New app booking', message: `${b.customerName} confirmed ${vehicle.name} (${id}) for ${saved?.pickupDate}.` });
     await this.store.notify({ type: 'booking', customerId: me.sub, title: 'Booking confirmed', message: `Your ${vehicle.name} (${id}) is confirmed for pickup on ${saved?.pickupDate} at ${saved?.pickupTime}.` });
     return saved;
@@ -191,7 +190,6 @@ export class MeController {
     if (!['QUOTED', 'PENDING', 'CONFIRMED'].includes(b.status)) throw new BadRequestException('This booking can no longer be cancelled in the app. Please contact KeyGo.');
     const saved = await this.bookings.patchBooking(id, { status: 'Cancelled' });
     const vehicle = await this.bookings.vehicleWithRates(b.vehicleId);
-    if (vehicle.status === 'RESERVED' && !(await this.bookings.vehicleHeldElsewhere(b.vehicleId, id))) await this.bookings.setVehicleStatus(b.vehicleId, 'AVAILABLE');
     if (b.status === 'CONFIRMED') await this.store.notify({ type: 'booking', title: 'Booking cancelled', message: `${b.customerName} cancelled ${id} (${vehicle.name}).` });
     return saved;
   }

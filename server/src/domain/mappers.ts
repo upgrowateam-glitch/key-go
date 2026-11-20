@@ -68,6 +68,14 @@ const vehicleDefaults = (type: string): Json => ({
 });
 
 /** A vehicle for the apps. Weekly, monthly and deposit follow the pricing rules unless the car has its own prices. */
+/** Path of the photo customers see: the chosen main photo, else the front, else the first one uploaded. */
+function mainPhotoPath(id: string, details: Json): string | undefined {
+  const photos = (details.photos && typeof details.photos === 'object' ? details.photos : {}) as Record<string, string>;
+  const chosen = typeof details.mainPhoto === 'string' ? photos[details.mainPhoto] : undefined;
+  const fileId = chosen ?? photos.front ?? Object.values(photos)[0];
+  return fileId ? `/public/vehicles/${encodeURIComponent(id)}/photos/${encodeURIComponent(fileId)}` : undefined;
+}
+
 export function vehicleToApi(v: VehicleWithRates, rules: PricingRules = DEFAULT_PRICING): Json {
   const type = v.type;
   const details = asObject(v.details);
@@ -100,6 +108,8 @@ export function vehicleToApi(v: VehicleWithRates, rules: PricingRules = DEFAULT_
     odometerKm: v.odometerKm,
     fuelLevelPercent: v.fuelLevelPercent,
     photoUrl: v.photoUrl ?? undefined,
+    // The car's main photo uploaded by staff (Vehicle → Photos), served by /public/vehicles/:id/photos/:fileId
+    mainPhotoPath: mainPhotoPath(v.id, details),
     pricePerDay: rates?.daily ?? 0,
     rates,
   };

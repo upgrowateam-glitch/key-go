@@ -89,7 +89,7 @@ export default function FleetScreen() {
         if (category !== 'All categories' && extras.data && categoryOf(extras.data, v.id) !== category) return false;
         if (branch !== 'All branches' && (v.branch ?? 'No branch') !== branch) return false;
         if (!q) return true;
-        const hay = [v.name, v.vehicleNumber, v.id, v.brand ?? ''].join('|').toLowerCase().replace(/\s+/g, '');
+        const hay = [v.name, v.vehicleNumber, v.id, v.code ?? '', v.brand ?? ''].join('|').toLowerCase().replace(/\s+/g, '');
         return hay.includes(q);
       })
       .sort(SORTERS[sort]);
@@ -144,7 +144,7 @@ export default function FleetScreen() {
               {v.name}
             </Text>
             <Text style={styles.cellSub} numberOfLines={1}>
-              ID {v.id}
+              {v.code ?? `ID ${v.id}`}
             </Text>
           </View>
         </View>

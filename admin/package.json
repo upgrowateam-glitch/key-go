@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@react-native/assets-registry": "0.86.3",
+    "leaflet": "1.9.4",
     "lucide-react-native": "^1.48.0",
     "next": "^16.4.6",
     "react": "19.2.3",
@@ -20,6 +21,7 @@
     "react-native-web": "~0.21.0"
   },
   "devDependencies": {
+    "@types/leaflet": "1.9.20",
     "@types/node": "^22.0.0",
     "@types/react": "~19.2.2",
     "@types/react-dom": "~19.2.0",

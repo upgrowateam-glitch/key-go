@@ -71,6 +71,8 @@ export interface Vehicle {
   photoUrl?: string;
   /** Fleet photo shipped with the app (data/fleetPhotos.ts). */
   photoKey?: string;
+  /** The car's own main photo on the KeyGo server (uploaded by staff). */
+  mainPhotoPath?: string;
   /** Current price list from the server; pricePerDay equals rates.daily. */
   rates?: import('../data/pricing').VehicleRates;
   imageAsset?: any;

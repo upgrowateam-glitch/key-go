@@ -1,51 +1,34 @@
 import { useRouter } from '@/shims/expo-router';
-import { RefreshCw } from 'lucide-react-native';
+import { RefreshCw, Satellite } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Column, DataTable, EmptyState, GpsMapPlaceholder, MapMarker, Section, SegmentedControl, SimulatedNote, StatusBadge } from '../../components/kit';
+import { Badge, Button, Card, Column, DataTable, EmptyState, Section, SegmentedControl, StatusBadge } from '../../components/kit';
+import { LiveMap, type LiveMarker } from '../../components/portal/LiveMap';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { isOverdue } from '../../lib/lifecycle';
-import { GpsPing, pingFleet } from '../../services/tracking';
+import { ago, useGpsFeed, type CarPosition } from '../../services/gps';
 import type { Vehicle } from '../../types';
 import { ListToolbar, Pager, useCommonStyles, usePaged } from '../agreements/listTools';
 
 const FILTERS = ['On rent', 'On time', 'Overdue', 'All vehicles'] as const;
 type Filter = (typeof FILTERS)[number];
 
-/** Normalises lat/lng of the shown vehicles into 0..1 map space (simple min/max, not a projection). */
-function toMapPoints(vs: Vehicle[]) {
-  if (vs.length === 0) return new Map<string, { x: number; y: number }>();
-  const lats = vs.map((v) => v.gps.lat);
-  const lngs = vs.map((v) => v.gps.lng);
-  const [minLat, maxLat, minLng, maxLng] = [Math.min(...lats), Math.max(...lats), Math.min(...lngs), Math.max(...lngs)];
-  const span = (a: number, b: number) => (b - a > 1e-6 ? b - a : 0);
-  return new Map(
-    vs.map((v, i) => {
-      const sx = span(minLng, maxLng);
-      const sy = span(minLat, maxLat);
-      // Spread single / identical points so pins don't overlap.
-      const x = sx ? 0.12 + ((v.gps.lng - minLng) / sx) * 0.7 : 0.3 + (i % 3) * 0.2;
-      const y = sy ? 0.15 + (1 - (v.gps.lat - minLat) / sy) * 0.65 : 0.35 + (i % 2) * 0.25;
-      return [v.id, { x, y }];
-    })
-  );
-}
-
+/** Every car's live location from the GPS tracking server, with rentals and overdue cars highlighted. */
 export default function GpsMapTab() {
   const styles = useCommonStyles();
   const router = useRouter();
   const { isPhone } = useResponsive();
-  const { bookings, vehicles, today, showToast } = useApp();
-  const [filter, setFilter] = useState<Filter>('On rent');
+  const { bookings, vehicles, today } = useApp();
+  const { feed, error, reload } = useGpsFeed();
+  const [filter, setFilter] = useState<Filter>('All vehicles');
   const [query, setQuery] = useState('');
-  const [pings, setPings] = useState<Record<string, GpsPing>>({});
-  const [refreshing, setRefreshing] = useState(false);
 
   const tracked = useMemo(() => vehicles.filter((v) => v.status !== 'Sold'), [vehicles]);
   const rentalByVehicle = useMemo(() => new Map(bookings.filter((b) => b.status === 'Active').map((b) => [b.vehicleId, b])), [bookings]);
+  const liveByVehicle = useMemo(() => new Map((feed?.cars ?? []).map((c) => [c.vehicleId, c])), [feed]);
 
-  const onMap = useMemo(
+  const inFilter = useMemo(
     () =>
       tracked.filter((v) => {
         const b = rentalByVehicle.get(v.id);
@@ -56,35 +39,36 @@ export default function GpsMapTab() {
     [tracked, rentalByVehicle, filter, today]
   );
 
-  const points = toMapPoints(onMap);
-  const markers: MapMarker[] = onMap.flatMap((v) => {
-    const p = points.get(v.id);
-    if (!p) return [];
-    const b = rentalByVehicle.get(v.id);
-    const overdue = !!b && isOverdue(b, today);
-    return [{ id: v.id, label: `${v.vehicleNumber}${overdue ? ' · overdue' : ''}`, x: p.x, y: p.y, tone: overdue ? 'danger' : b ? 'primary' : 'neutral' }];
-  });
+  const markers: LiveMarker[] = useMemo(
+    () =>
+      inFilter.flatMap((v) => {
+        const p = liveByVehicle.get(v.id);
+        if (!p || p.lat === null || p.lng === null) return [];
+        const b = rentalByVehicle.get(v.id);
+        const overdue = !!b && isOverdue(b, today);
+        return [
+          {
+            id: v.id,
+            lat: p.lat,
+            lng: p.lng,
+            title: `${v.vehicleNumber} · ${v.name}`,
+            detail: `${b ? (overdue ? 'Overdue · ' : 'On rent · ') : ''}${p.speedKmh ?? 0} km/h · ${ago(p.at)}`,
+            tone: overdue ? 'danger' : p.status === 'online' ? 'primary' : 'muted',
+            onPress: () => router.push(`/fleet/${encodeURIComponent(v.id)}?tab=gps-tracking` as never),
+          } satisfies LiveMarker,
+        ];
+      }),
+    [inFilter, liveByVehicle, rentalByVehicle, today, router]
+  );
 
-  const positions = useMemo(() => {
+  const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return onMap.filter((v) => !q || [v.name, v.vehicleNumber, v.gps.area].some((s) => s.toLowerCase().includes(q)));
-  }, [onMap, query]);
-  const paged = usePaged(positions, `${filter}|${query}`);
+    return inFilter.filter((v) => !q || [v.name, v.vehicleNumber, v.code ?? '', v.gpsDeviceId].some((s) => s.toLowerCase().includes(q)));
+  }, [inFilter, query]);
+  const paged = usePaged(rows, `${filter}|${query}`);
+  const live = (v: Vehicle): CarPosition | undefined => liveByVehicle.get(v.id);
 
-  const refresh = () => {
-    setRefreshing(true);
-    pingFleet(tracked)
-      .then(
-        (next) => {
-          setPings(next);
-          showToast('Positions refreshed (simulated)');
-        },
-        (e: Error) => showToast(e.message)
-      )
-      .finally(() => setRefreshing(false));
-  };
-
-  const positionCols: Column<Vehicle>[] = [
+  const columns: Column<Vehicle>[] = [
     {
       key: 'vehicle',
       label: 'Vehicle',
@@ -100,38 +84,53 @@ export default function GpsMapTab() {
       ),
     },
     { key: 'status', label: 'Status', flex: 1, minWidth: 120, render: (v) => <StatusBadge status={v.status} /> },
-    { key: 'area', label: 'Location', flex: 1.8, minWidth: 200, value: (v) => v.gps.area },
-    { key: 'speed', label: 'Speed', flex: 0.7, minWidth: 90, align: 'right', value: (v) => `${pings[v.id]?.speedKmh ?? v.gps.speedKmh} km/h` },
     {
-      key: 'ignition',
-      label: 'Ignition',
-      flex: 0.7,
-      minWidth: 90,
+      key: 'gps',
+      label: 'GPS',
+      flex: 1,
+      minWidth: 120,
       render: (v) => {
-        const on = pings[v.id]?.ignitionOn ?? v.gps.ignitionOn;
-        return <Badge label={on ? 'On' : 'Off'} tone={on ? 'success' : 'neutral'} />;
+        const p = live(v);
+        return !v.gpsDeviceId ? <Badge label="No device" tone="neutral" /> : !p ? <Badge label="Not reporting" tone="warning" /> : <Badge label={p.status === 'online' ? 'Online' : 'Offline'} tone={p.status === 'online' ? 'success' : 'neutral'} />;
       },
     },
-    { key: 'updated', label: 'Updated', flex: 0.9, minWidth: 110, value: (v) => pings[v.id]?.updatedAt ?? v.gps.updatedAt },
+    { key: 'speed', label: 'Speed', flex: 0.7, minWidth: 90, align: 'right', value: (v) => (live(v)?.speedKmh === undefined || live(v)?.speedKmh === null ? '—' : `${live(v)!.speedKmh} km/h`) },
+    { key: 'updated', label: 'Last report', flex: 0.9, minWidth: 110, value: (v) => (live(v) ? ago(live(v)!.at) : '—') },
   ];
+
+  if (error || (feed && !feed.connected)) {
+    return (
+      <Card>
+        <EmptyState
+          title="Live tracking is not connected yet"
+          message={error || feed?.message || 'The GPS tracking server is not set up.'}
+          icon={(c) => <Satellite size={22} color={c} />}
+          action={<Button label="Try again" size="sm" variant="outline" icon={(c) => <RefreshCw size={14} color={c} />} onPress={reload} />}
+        />
+      </Card>
+    );
+  }
 
   return (
     <View>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 12 }}>
         <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} />
-        <Button label={refreshing ? 'Refreshing' : 'Refresh positions'} size="sm" variant="outline" disabled={refreshing} icon={(c) => <RefreshCw size={14} color={c} />} onPress={refresh} />
+        <Button label="Refresh" size="sm" variant="outline" icon={(c) => <RefreshCw size={14} color={c} />} onPress={reload} />
       </View>
-      <GpsMapPlaceholder markers={markers} height={isPhone ? 240 : 380} caption="Simulated GPS view · last known positions" />
-      <SimulatedNote>Positions are simulated until the GPS/telematics provider is connected.</SimulatedNote>
+      <LiveMap markers={markers} height={isPhone ? 260 : 420} />
+      <Text style={[styles.sub, { marginTop: 6 }]}>
+        {markers.length} of {inFilter.length} cars on the map · updates every 20 seconds · double-click a car to open it
+        {feed?.unmatched.length ? ` · ${feed.unmatched.length} device(s) not linked to a car yet (link them on the car's GPS tab)` : ''}
+      </Text>
 
-      <Section title="Vehicle positions" subtitle={`Last known GPS fix · ${positions.length} of ${onMap.length} shown`}>
-        <ListToolbar query={query} onQuery={setQuery} placeholder="Vehicle, number or location" onReset={query ? () => setQuery('') : undefined} />
+      <Section title="Vehicle positions" subtitle={`${rows.length} of ${inFilter.length} shown`}>
+        <ListToolbar query={query} onQuery={setQuery} placeholder="Vehicle, number or GPS device" onReset={query ? () => setQuery('') : undefined} />
         <DataTable
-          columns={positionCols}
+          columns={columns}
           rows={paged.pageRows}
           rowKey={(v) => v.id}
-          onRowPress={(v) => router.push(`/fleet/${encodeURIComponent(v.id)}`)}
-          empty={<EmptyState compact title={onMap.length ? 'No vehicles match' : 'No vehicles to show'} message={onMap.length ? 'Try another search.' : 'Nothing is in this filter right now.'} />}
+          onRowPress={(v) => router.push(`/fleet/${encodeURIComponent(v.id)}?tab=gps-tracking` as never)}
+          empty={<EmptyState compact title={inFilter.length ? 'No vehicles match' : 'No vehicles to show'} message={inFilter.length ? 'Try another search.' : 'Nothing is in this filter right now.'} />}
         />
         <Pager paged={paged} />
       </Section>

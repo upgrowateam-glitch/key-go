@@ -48,8 +48,14 @@ const TABS = [
 ] as const;
 const TAB_LABELS = TABS.map((t) => t.label);
 
-/** Statuses an operator can set directly. "Sold" is only reachable through the sale flow. */
-const SETTABLE_STATUSES = ['Available', 'Reserved', 'On Rent', 'Maintenance'] as const;
+/** What each status means, shown under the badge. Only Maintenance is switched by hand; Sold comes from the sale. */
+const STATUS_HELP: Record<VehicleStatus, string> = {
+  Available: 'Ready to rent. Status follows the bookings automatically.',
+  Reserved: 'Booked for today; becomes On Rent at the pickup inspection.',
+  'On Rent': 'Out with a customer; becomes Available after the return.',
+  Maintenance: 'Not offered to customers until you put it back in service.',
+  Sold: 'This vehicle has been sold.',
+};
 
 function VehicleDetail() {
   const colors = useThemeColors();
@@ -127,7 +133,7 @@ function VehicleDetail() {
               <StatusBadge status={v.status} />
               {v.badge ? <Badge label={v.badge} tone="highlight" /> : null}
               {v.photoNeedsReplacement ? <Badge label="Showroom photo needed" tone="warning" /> : null}
-              <Text style={styles.muted}>ID {v.id}</Text>
+              <Text style={styles.muted}>{v.code ?? `ID ${v.id}`}</Text>
             </View>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
               <HeroFact label="Daily rate" value={formatINR(v.pricePerDay)} />
@@ -136,19 +142,18 @@ function VehicleDetail() {
               <HeroFact label="Bookings" value={String(history.length)} />
             </View>
             <View>
-              <Text style={styles.label}>Change status</Text>
-              {isSold ? (
-                <Text style={styles.muted}>This vehicle has been sold. Status can no longer be changed.</Text>
-              ) : (
+              <Text style={styles.label}>Status</Text>
+              <Text style={styles.muted}>{STATUS_HELP[v.status]}</Text>
+              {isSold ? null : (
                 <>
-                  <ChipGroup<VehicleStatus>
-                    options={SETTABLE_STATUSES}
-                    value={v.status}
-                    onChange={(s) => {
-                      if (s !== v.status) setPendingStatus(s);
-                    }}
-                  />
-                  <Text style={[styles.hint, { marginTop: 6 }]}>To mark as sold, use the Financials tab.</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    {v.status === 'Maintenance' ? (
+                      <Button label="Back in service" size="sm" onPress={() => setPendingStatus('Available')} />
+                    ) : (
+                      <Button label="Put in maintenance" size="sm" variant="outline" disabled={v.status === 'On Rent'} onPress={() => setPendingStatus('Maintenance')} />
+                    )}
+                  </View>
+                  <Text style={[styles.hint, { marginTop: 6 }]}>Available, Reserved and On Rent follow the bookings. To mark as sold, use the Financials tab.</Text>
                 </>
               )}
             </View>
@@ -179,9 +184,13 @@ function VehicleDetail() {
       ) : null}
       <ConfirmDialog
         visible={pendingStatus !== null}
-        title={`Change status to ${pendingStatus ?? ''}?`}
-        message={`${v.name} (${v.vehicleNumber}) is currently ${v.status}. This does not change any existing booking.`}
-        confirmLabel="Change status"
+        title={pendingStatus === 'Maintenance' ? `Put ${v.name} in maintenance?` : `Put ${v.name} back in service?`}
+        message={
+          pendingStatus === 'Maintenance'
+            ? `${v.vehicleNumber} will not be offered to customers. Confirmed bookings stay; move them if the car will not be ready.`
+            : `${v.vehicleNumber} becomes available again (or Reserved/On Rent if a booking needs it).`
+        }
+        confirmLabel={pendingStatus === 'Maintenance' ? 'Put in maintenance' : 'Back in service'}
         onConfirm={() => {
           if (pendingStatus) updateVehicleStatus(v.id, pendingStatus);
           setPendingStatus(null);

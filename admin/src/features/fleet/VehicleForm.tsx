@@ -9,6 +9,7 @@ import { useResource } from '../../services/mockClient';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 import { CarKind, Vehicle, VehicleType } from '../../types';
 import { ISO_DATE, num } from './shared';
+import { normaliseRegistration } from '../../lib/registration';
 
 type FuelType = string;
 const NO_BRANCH = 'No branch';
@@ -43,6 +44,8 @@ interface FormState {
   tenure: string;
   paidMonths: string;
   gpsDeviceId: string;
+  gpsProvider: string;
+  gpsSim: string;
   fastagId: string;
   insuranceProvider: string;
   insurancePolicyNo: string;
@@ -74,6 +77,8 @@ const initialForm = (today: string, v?: Vehicle, category?: VehicleCategory): Fo
   tenure: v?.loanDetails ? String(v.loanDetails.tenureMonths) : '',
   paidMonths: String(v?.loanDetails?.paidMonths ?? 0),
   gpsDeviceId: v?.gpsDeviceId ?? '',
+  gpsProvider: v?.gpsProvider ?? '',
+  gpsSim: v?.gpsSim ?? '',
   fastagId: v?.fastagId ?? '',
   insuranceProvider: recorded(v?.insuranceProvider ?? ''),
   insurancePolicyNo: recorded(v?.insurancePolicyNo ?? ''),
@@ -113,6 +118,7 @@ export function VehicleForm({
     const e: Partial<Record<keyof FormState, string>> = {};
     if (!form.name.trim()) e.name = 'Enter the vehicle model name';
     if (!form.number.trim()) e.number = 'Enter the registration number';
+    else if (!normaliseRegistration(form.number) && plate(form.number) !== plate(vehicle?.vehicleNumber ?? '')) e.number = 'Use the format KL 13 AB 1234 (or 22 BH 1234 AB)';
     else if (vehicles.some((v) => v.id !== vehicle?.id && plate(v.vehicleNumber) === plate(form.number))) e.number = 'A vehicle with this number already exists';
     if (!ISO_DATE.test(form.purchaseDate)) e.purchaseDate = 'Use YYYY-MM-DD';
     if (!(num(form.purchaseCost) > 0)) e.purchaseCost = 'Enter the purchase cost';
@@ -134,7 +140,6 @@ export function VehicleForm({
       return;
     }
 
-    const rand = (n: number) => Math.floor(10 ** (n - 1) + Math.random() * 9 * 10 ** (n - 1));
     const isEV = form.fuel === 'Electric';
     const fields = {
       name: form.name.trim(),
@@ -146,7 +151,7 @@ export function VehicleForm({
       seats: Math.round(num(form.seats)),
       transmission: form.transmission,
       fuel: form.fuel,
-      vehicleNumber: form.number.trim().toUpperCase(),
+      vehicleNumber: normaliseRegistration(form.number) ?? form.number.trim().toUpperCase(),
       purchaseCost: Math.round(num(form.purchaseCost)),
       purchaseDate: form.purchaseDate,
       loanDetails: form.hasLoan
@@ -158,8 +163,11 @@ export function VehicleForm({
             paidMonths: Math.round(num(form.paidMonths || '0')),
           }
         : undefined,
-      gpsDeviceId: form.gpsDeviceId.trim() || `GPS-NEW-${rand(4)}`,
-      fastagId: form.fastagId.trim() || `FT-${rand(8)}`,
+      // Left empty until the real device / tag is known (a made-up id would never match the GPS server)
+      gpsDeviceId: form.gpsDeviceId.trim(),
+      gpsProvider: form.gpsProvider.trim() || undefined,
+      gpsSim: form.gpsSim.trim() || undefined,
+      fastagId: form.fastagId.trim().toUpperCase(),
       insuranceProvider: form.insuranceProvider.trim() || NOT_RECORDED,
       insurancePolicyNo: form.insurancePolicyNo.trim() || NOT_RECORDED,
       insuranceExpiry: form.insuranceExpiry || NOT_RECORDED,
@@ -273,8 +281,12 @@ export function VehicleForm({
 
       <Text style={[styles.formSection, { marginTop: 16 }]}>GPS & FASTag</Text>
       <FormRow>
-        <Field label="GPS device ID" value={form.gpsDeviceId} onChangeText={(t) => set('gpsDeviceId', t)} placeholder="Generated if left blank" />
-        <Field label="FASTag ID" value={form.fastagId} onChangeText={(t) => set('fastagId', t)} placeholder="Generated if left blank" />
+        <Field label="GPS device ID" value={form.gpsDeviceId} onChangeText={(t) => set('gpsDeviceId', t)} placeholder="IMEI or Traccar Client ID" hint="Must match the device in the GPS server. Leave empty if not fitted yet." />
+        <Field label="GPS company" value={form.gpsProvider} onChangeText={(t) => set('gpsProvider', t)} placeholder="e.g. Traccar (test phone)" />
+      </FormRow>
+      <FormRow>
+        <Field label="GPS SIM number" value={form.gpsSim} onChangeText={(t) => set('gpsSim', t)} keyboardType="phone-pad" placeholder="Optional" />
+        <Field label="FASTag ID" value={form.fastagId} onChangeText={(t) => set('fastagId', t)} placeholder="Tag number on the windscreen" />
       </FormRow>
 
       <Text style={styles.formSection}>Insurance</Text>

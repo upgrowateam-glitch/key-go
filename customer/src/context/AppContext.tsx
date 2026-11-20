@@ -252,7 +252,8 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
       paymentStatus: b.paymentStatus === 'Unpaid' ? 'Deposit paid' : b.paymentStatus,
       reminderScheduledFor: addDays(b.pickupDate, -2),
     });
-    if (previousStatus === 'Available') setVehicleStatus(b.vehicleId, 'Reserved');
+    // Like the server: a confirmed booking holds the car only from its pickup day
+    if (previousStatus === 'Available' && b.pickupDate <= TODAY) setVehicleStatus(b.vehicleId, 'Reserved');
     sendBookingAction(bookingId, '/confirm', undefined, () => {
       putBooking(bookingId, b);
       setVehicleStatus(b.vehicleId, previousStatus);

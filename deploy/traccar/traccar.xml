@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<!--
+  Traccar (GPS tracking server) for KeyGo.
+  - Web and API on 127.0.0.1:4180 only; Traefik serves it at https://GPS_DOMAIN.
+  - Only the OsmAnd protocol is switched on, on 127.0.0.1:4181; Traefik serves it at https://GPS_INGEST_DOMAIN.
+    The Traccar Client phone app (and many trackers) send locations this way.
+  - Real GPS devices that use their own protocol (e.g. Teltonika on 5027) are added here later, together
+    with opening that port on the VPS firewall.
+  - Data is kept in the keygo-traccar-data volume.
+-->
+<properties>
+    <entry key='config.default'>./conf/default.xml</entry>
+
+    <entry key='database.driver'>org.h2.Driver</entry>
+    <entry key='database.url'>jdbc:h2:./data/database</entry>
+    <entry key='database.user'>sa</entry>
+    <entry key='database.password'></entry>
+
+    <entry key='web.address'>127.0.0.1</entry>
+    <entry key='web.port'>4180</entry>
+
+    <entry key='protocols.enable'>osmand</entry>
+    <entry key='osmand.address'>127.0.0.1</entry>
+    <entry key='osmand.port'>4181</entry>
+</properties>

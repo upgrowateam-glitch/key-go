@@ -26,6 +26,7 @@ import {
 import { DEFAULT_AUTOMATIONS, DEFAULT_LOYALTY_TIERS, DEFAULT_NOTIFICATION_SETTINGS, newId } from '../config/defaults';
 import { api } from '../lib/api';
 import { computeQuote } from '../lib/pricing';
+import { lifecycleStatus } from '../lib/vehicleStatus';
 import { addDays, daysBetween } from '../lib/format';
 import { serverDoc, type ServerDoc } from '../lib/serverState';
 import { useSyncedList } from '../lib/syncedList';
@@ -242,7 +243,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   });
   const records = <T,>(collection: string) => (seed.records[collection] ?? []) as T[];
 
-  const [vehicles, setVehicles] = useSyncedList<Vehicle>(seed.vehicles, {
+  const [vehicles, setVehicles, vehiclesRef] = useSyncedList<Vehicle>(seed.vehicles, {
     keyOf: (v) => v.id,
     save: ({ imageAsset: _photo, ...v }) => api(`/admin/vehicles/${enc(v.id)}`, { method: 'PUT', body: v }),
     onError: onSaveError,
@@ -289,6 +290,14 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
 
   const setVehicleStatusSilently = (id: string, status: Vehicle['status']) =>
     setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status } : v)));
+
+  /** After a booking changes, the car's status follows the bookings (the server applies the same rule). */
+  const followBookings = (vehicleId: string) => {
+    const v = vehiclesRef.current.find((x) => x.id === vehicleId);
+    if (!v) return;
+    const next = lifecycleStatus(v.status, vehicleId, bookingsRef.current, TODAY);
+    if (next !== v.status) setVehicleStatusSilently(vehicleId, next);
+  };
 
   // ---------- Fleet ----------
   const updateVehicleStatus = (id: string, status: Vehicle['status']) => {
@@ -369,7 +378,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
           : x
       )
     );
-    setVehicleStatusSilently(b.vehicleId, 'Reserved');
+    followBookings(b.vehicleId);
     showToast(`Booking ${bookingId} confirmed · reminder scheduled`);
   };
 
@@ -378,7 +387,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
     if (!b) return;
     patchBooking(bookingId, { status: 'Cancelled' });
     const stillHeld = bookingsRef.current.some((x) => x.id !== bookingId && x.vehicleId === b.vehicleId && (x.status === 'Confirmed' || x.status === 'Active'));
-    if (b.status !== 'Completed' && !stillHeld) setVehicleStatusSilently(b.vehicleId, 'Available');
+    if (!stillHeld) followBookings(b.vehicleId);
     showToast(`Booking ${bookingId} cancelled`);
   };
 
@@ -396,7 +405,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
     });
     const confirmed: Booking = { ...quote, status: 'Confirmed', paymentStatus: 'Deposit paid' };
     setBookings((prev) => prev.map((b) => (b.id === quote.id ? confirmed : b)));
-    setVehicleStatusSilently(vehicle.id, 'Reserved');
+    followBookings(vehicle.id);
     return confirmed;
   };
 
@@ -447,7 +456,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         kmDriven: 0,
         paymentStatus: 'Paid',
       });
-      setVehicleStatusSilently(b.vehicleId, 'On Rent');
+      followBookings(b.vehicleId);
       showToast('Pickup inspection saved · rental is now active');
     } else {
       const start = b.startOdometerKm ?? input.odometerKm;
@@ -476,7 +485,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
       completedAt: TODAY,
       keylessUnlocked: false,
     });
-    setVehicleStatusSilently(b.vehicleId, 'Available');
+    followBookings(b.vehicleId);
     setAgreements((prev) => prev.map((a) => (a.bookingId === bookingId ? { ...a, status: 'Closed' } : a)));
     const extra = s.fuelCharges + s.tollCharges + s.fineCharges + s.damageCharges;
     setFinanceEntries((prev) => [

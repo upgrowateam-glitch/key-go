@@ -50,6 +50,10 @@ services:
       CORS_ORIGINS: https://${ADMIN_DOMAIN},https://${APP_DOMAIN},http://localhost:3000,http://localhost:8081
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
       FILE_STORAGE_DIR: /app/storage
+      # Live car locations from the traccar container (empty values = GPS pages say "not set up")
+      TRACCAR_URL: http://127.0.0.1:4180
+      TRACCAR_EMAIL: ${TRACCAR_EMAIL:-}
+      TRACCAR_PASSWORD: ${TRACCAR_PASSWORD:-}
     volumes:
       - keygo-storage:/app/storage
     labels:
@@ -90,8 +94,35 @@ services:
       - traefik.http.routers.keygo-app.tls.certresolver=letsencrypt
       - traefik.http.services.keygo-app.loadbalancer.server.port=${CUSTOMER_PORT}
 
+  # GPS tracking server. Web + API on 127.0.0.1:4180 (https://${GPS_DOMAIN}); phones and trackers send
+  # locations to 127.0.0.1:4181 (https://${GPS_INGEST_DOMAIN}). Settings in traccar/traccar.xml.
+  traccar:
+    image: traccar/traccar:6.17.0
+    container_name: keygo-traccar
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - keygo-traccar-data:/opt/traccar/data
+      - keygo-traccar-logs:/opt/traccar/logs
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.keygo-gps.rule=Host(`${GPS_DOMAIN}`)
+      - traefik.http.routers.keygo-gps.entrypoints=websecure
+      - traefik.http.routers.keygo-gps.tls.certresolver=letsencrypt
+      - traefik.http.routers.keygo-gps.service=keygo-gps
+      - traefik.http.services.keygo-gps.loadbalancer.server.port=4180
+      - traefik.http.routers.keygo-gps-in.rule=Host(`${GPS_INGEST_DOMAIN}`)
+      - traefik.http.routers.keygo-gps-in.entrypoints=websecure
+      - traefik.http.routers.keygo-gps-in.tls.certresolver=letsencrypt
+      - traefik.http.routers.keygo-gps-in.service=keygo-gps-in
+      - traefik.http.services.keygo-gps-in.loadbalancer.server.port=4181
+
 volumes:
   # KeyGo database files; survives container restarts and rebuilds
   keygo-pgdata:
   # Uploaded documents, photos and signatures; survives container rebuilds
   keygo-storage:
+  # GPS tracking server data (devices, positions, users) and its logs
+  keygo-traccar-data:
+  keygo-traccar-logs:

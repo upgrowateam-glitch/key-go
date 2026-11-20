@@ -43,6 +43,19 @@ class Env {
   @IsOptional()
   @IsString()
   ENABLE_API_DOCS?: string;
+
+  /** GPS tracking server (Traccar), e.g. http://127.0.0.1:4180, and the KeyGo account KeyGo uses to read positions. */
+  @IsOptional()
+  @IsString()
+  TRACCAR_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  TRACCAR_EMAIL?: string;
+
+  @IsOptional()
+  @IsString()
+  TRACCAR_PASSWORD?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {
