@@ -207,7 +207,10 @@ export class AdminController {
   async remove(@Param('collection') collection: string, @Param('id') id: string, @CurrentUser() me: AuthPayload) {
     if (PROTECTED_COLLECTIONS.has(collection)) throw new ForbiddenException('Use the Driver pay screen for salaries, advances and deductions.');
     ensure(me, areaOfCollection(checkName('collection', collection)), 'edit');
+    // A deleted driver's licence, ID and police verification files are deleted too
+    const driver = collection === 'drivers' ? await this.store.get('drivers', id) : null;
     await this.store.remove(collection, checkName('record', id));
+    if (driver) await this.identity.removeAllFor('driver', id, actorOf(me), String(driver.name ?? id));
   }
 
   // ---------------------------------------------------------------- settings (company profile, policies, terms, templates, ...)

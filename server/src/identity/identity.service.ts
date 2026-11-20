@@ -238,6 +238,19 @@ export class IdentityService implements OnModuleInit {
     if (d.ownerType === 'customer') await this.refreshCustomer(d.ownerId, actor, FACE_KINDS.includes(d.kind) || d.kind === 'id_front' ? 'picture removed' : undefined);
   }
 
+  /** A driver or customer was deleted: delete all their documents and files (recorded in the audit log). */
+  async removeAllFor(ownerType: OwnerType, ownerId: string, actor: Actor, name?: string) {
+    const docs = await this.prisma.identityDocument.findMany({ where: { ownerType, ownerId } });
+    for (const d of docs) {
+      await this.prisma.identityDocument.delete({ where: { id: d.id } });
+      await this.deleteStoredFile(d.fileId);
+    }
+    if (docs.length) {
+      await this.audit.log(actor, 'documents.deleted_with_owner', { type: ownerType, id: ownerId, name }, { count: docs.length, kinds: docs.map((d) => d.kind) });
+    }
+    return docs.length;
+  }
+
   // ---------------------------------------------------------------- face check
 
   /** Staff compared the customer's photo or selfie with the ID card photo. Recorded in the audit log. */
