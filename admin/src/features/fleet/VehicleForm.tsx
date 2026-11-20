@@ -209,7 +209,7 @@ export function VehicleForm({
           <Button label={vehicle ? 'Save changes' : 'Add to fleet'} onPress={submit} />
         </>
       }>
-      <Text style={styles.formSection}>Vehicle</Text>
+      <Text style={[styles.formSection, { marginTop: 0, paddingTop: 0, borderTopWidth: 0 }]}>Vehicle</Text>
       <FormRow>
         <Field label="Model name" required value={form.name} onChangeText={(t) => set('name', t)} placeholder="e.g. Executive Sedan" error={errors.name} />
         <Field label="Brand" value={form.brand} onChangeText={(t) => set('brand', t)} placeholder="Optional" />
@@ -279,7 +279,7 @@ export function VehicleForm({
         </View>
       ) : null}
 
-      <Text style={[styles.formSection, { marginTop: 16 }]}>GPS & FASTag</Text>
+      <Text style={styles.formSection}>GPS & FASTag</Text>
       <FormRow>
         <Field label="GPS device ID" value={form.gpsDeviceId} onChangeText={(t) => set('gpsDeviceId', t)} placeholder="IMEI or Traccar Client ID" hint="Must match the device in the GPS server. Leave empty if not fitted yet." />
         <Field label="GPS company" value={form.gpsProvider} onChangeText={(t) => set('gpsProvider', t)} placeholder="e.g. Traccar (test phone)" />
@@ -310,6 +310,18 @@ export function VehicleForm({
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    formSection: { color: colors.secondaryText, fontSize: 11, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+    // Each group of fields starts with a clear heading on a divider line
+    formSection: {
+      color: colors.primaryText,
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      marginTop: 18,
+      marginBottom: 12,
+      paddingTop: 14,
+      borderTopWidth: 1,
+      borderTopColor: colors.line,
+    },
     fieldLabel: { color: colors.txt, fontSize: 12, fontWeight: '700', marginBottom: 6 },
   });

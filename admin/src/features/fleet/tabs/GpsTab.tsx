@@ -1,7 +1,7 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import { Link2, RefreshCw, Satellite } from 'lucide-react-native';
-import { Badge, Button, Card, EmptyState, KeyValueGrid, Section } from '../../../components/kit';
+import { Clock, Cpu, Gauge, KeyRound, Link2, MapPin, Navigation, RefreshCw, Satellite, Settings2, Smartphone, Wifi } from 'lucide-react-native';
+import { Badge, Button, Card, EmptyState, Section } from '../../../components/kit';
 import { LiveMap } from '../../../components/portal/LiveMap';
 import { useApp } from '../../../context/AppContext';
 import { ago, useGpsFeed } from '../../../services/gps';
@@ -9,6 +9,7 @@ import type { FleetExtras } from '../../../services/fleet';
 import { useThemeColors, useThemedStyles } from '../../../theme';
 import { Vehicle } from '../../../types';
 import { makeStyles } from '../detailStyles';
+import { InfoTile, SectionHeader } from '../ui';
 
 /** The car's GPS settings and its live position from the GPS tracking server (Traccar). */
 export function GpsTab({ v }: { v: Vehicle; extras: FleetExtras; onChanged: () => void }) {
@@ -21,15 +22,13 @@ export function GpsTab({ v }: { v: Vehicle; extras: FleetExtras; onChanged: () =
 
   const settings = (
     <Card>
-      <Text style={styles.cardTitle}>GPS settings</Text>
-      <KeyValueGrid
-        items={[
-          { label: 'GPS device ID', value: v.gpsDeviceId || 'Not set' },
-          { label: 'GPS company', value: v.gpsProvider || 'Not set' },
-          { label: 'GPS SIM number', value: v.gpsSim || 'Not set' },
-        ]}
-      />
-      <Text style={[styles.hint, { marginTop: 8 }]}>Change these with Edit vehicle. The device ID must match the device in the GPS tracking server.</Text>
+      <SectionHeader icon={Settings2} title="GPS settings" subtitle="Change these with Edit vehicle" tone="violet" />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        <InfoTile icon={Cpu} label="GPS device ID" value={v.gpsDeviceId || 'Not set'} tone="violet" />
+        <InfoTile icon={Satellite} label="GPS company" value={v.gpsProvider || 'Not set'} tone="violet" />
+        <InfoTile icon={Smartphone} label="GPS SIM number" value={v.gpsSim || 'Not set'} tone="violet" />
+      </View>
+      <Text style={[styles.hint, { marginTop: 10 }]}>Change these with Edit vehicle. The device ID must match the device in the GPS tracking server.</Text>
     </Card>
   );
 
@@ -57,27 +56,33 @@ export function GpsTab({ v }: { v: Vehicle; extras: FleetExtras; onChanged: () =
         <LiveMap height={300} markers={[{ id: v.id, lat: live!.lat!, lng: live!.lng!, title: v.vehicleNumber, detail: `${live!.speedKmh ?? 0} km/h · ${ago(live!.at)}`, tone: live!.status === 'online' ? 'primary' : 'muted' }]} />
       ) : null}
       <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-          <Text style={[styles.cardTitle, { marginBottom: 0 }]}>Live position</Text>
-          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-            {live ? <Badge label={live.status === 'online' ? 'Online' : 'Offline'} tone={live.status === 'online' ? 'success' : 'neutral'} /> : null}
-            <Button label="Refresh" size="sm" variant="outline" icon={(c) => <RefreshCw size={14} color={c} />} onPress={reload} />
-          </View>
-        </View>
+        <SectionHeader
+          icon={Navigation}
+          title="Live position"
+          subtitle="From the GPS tracking server, refreshed every 20 seconds"
+          tone="info"
+          action={
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              {live ? <Badge label={live.status === 'online' ? 'Online' : 'Offline'} tone={live.status === 'online' ? 'success' : 'neutral'} /> : null}
+              <Button label="Refresh" size="sm" variant="outline" icon={(c) => <RefreshCw size={14} color={c} />} onPress={reload} />
+            </View>
+          }
+        />
         {live ? (
-          <KeyValueGrid
-            items={[
-              { label: 'Coordinates', value: hasFix ? `${live.lat!.toFixed(5)}, ${live.lng!.toFixed(5)}` : 'No fix yet' },
-              { label: 'Speed', value: live.speedKmh === null ? '—' : `${live.speedKmh} km/h` },
-              { label: 'Ignition', value: live.ignition === null ? 'Not reported' : live.ignition ? 'On' : 'Off' },
-              { label: 'Last report', value: ago(live.at) },
-              { label: 'Device name in GPS server', value: live.name },
-            ]}
-          />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+            <InfoTile icon={MapPin} label="Coordinates" value={hasFix ? `${live.lat!.toFixed(5)}, ${live.lng!.toFixed(5)}` : 'No fix yet'} tone="info" />
+            <InfoTile icon={Gauge} label="Speed" value={live.speedKmh === null ? '—' : `${live.speedKmh} km/h`} tone="info" />
+            <InfoTile icon={KeyRound} label="Ignition" value={live.ignition === null ? 'Not reported' : live.ignition ? 'On' : 'Off'} tone={live.ignition ? 'success' : 'primary'} />
+            <InfoTile icon={Clock} label="Last report" value={ago(live.at)} />
+            <InfoTile icon={Wifi} label="Device name in GPS server" value={live.name} />
+          </View>
         ) : (
-          <Text style={styles.hint}>
-            {v.gpsDeviceId ? `No device with ID "${v.gpsDeviceId}" is sending locations. Check the ID, or that the device/phone is switched on.` : 'This car has no GPS device ID yet.'}
-          </Text>
+          <EmptyState
+            compact
+            title={v.gpsDeviceId ? 'No signal from this device' : 'No GPS device yet'}
+            message={v.gpsDeviceId ? `No device with ID "${v.gpsDeviceId}" is sending locations. Check the ID, or that the device/phone is switched on.` : 'This car has no GPS device ID yet. Add it with Edit vehicle.'}
+            icon={(c) => <Satellite size={22} color={c} />}
+          />
         )}
       </Card>
       {settings}

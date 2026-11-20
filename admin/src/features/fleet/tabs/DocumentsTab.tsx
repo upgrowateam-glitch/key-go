@@ -12,6 +12,7 @@ import { useThemeColors, useThemedStyles } from '../../../theme';
 import { Vehicle, VerificationStatus } from '../../../types';
 import { makeStyles } from '../detailStyles';
 import { expiryFlag, ISO_DATE } from '../shared';
+import { ExpiryMeter } from '../ui';
 
 type RenewKind = 'insurance' | 'puc';
 
@@ -100,6 +101,8 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
             { label: 'Expiry', value: formatDate(v.insuranceExpiry) },
           ]}
           flag={isSold ? null : expiryFlag(v.insuranceExpiry, today)}
+          expiry={isSold ? undefined : v.insuranceExpiry}
+          today={today}
           onRenew={isSold ? undefined : () => setRenewing('insurance')}
         />
         <DocCard
@@ -110,6 +113,8 @@ export function DocumentsTab({ v, extras, onChanged }: { v: Vehicle; extras: Fle
             { label: 'Expiry', value: formatDate(v.pucExpiry) },
           ]}
           flag={isSold ? null : expiryFlag(v.pucExpiry, today)}
+          expiry={isSold ? undefined : v.pucExpiry}
+          today={today}
           onRenew={isSold ? undefined : () => setRenewing('puc')}
         />
       </Grid>
@@ -299,12 +304,17 @@ function DocCard({
   icon,
   items,
   flag,
+  expiry,
+  today,
   onRenew,
 }: {
   title: string;
   icon: (c: string) => React.ReactNode;
   items: { label: string; value: string }[];
   flag: ReturnType<typeof expiryFlag>;
+  /** Shown as a "days left" bar. */
+  expiry?: string;
+  today: string;
   onRenew?: () => void;
 }) {
   const colors = useThemeColors();
@@ -317,7 +327,16 @@ function DocCard({
         {flag ? <Badge label={flag.label} tone={flag.tone} /> : <Badge label="Valid" tone="success" />}
       </View>
       <KeyValueGrid items={items} cols={2} />
-      {onRenew ? <Button label="Renew" variant={flag ? 'primary' : 'outline'} size="sm" icon={(c) => <RefreshCw size={14} color={c} />} onPress={onRenew} /> : null}
+      {onRenew ? (
+        <View style={{ marginBottom: 12 }}>
+          <ExpiryMeter expiry={expiry} today={today} />
+        </View>
+      ) : null}
+      {onRenew ? (
+        <View style={{ alignSelf: 'flex-start' }}>
+          <Button label="Renew" variant={flag ? 'primary' : 'outline'} size="sm" icon={(c) => <RefreshCw size={14} color={c} />} onPress={onRenew} />
+        </View>
+      ) : null}
     </Card>
   );
 }

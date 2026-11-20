@@ -7,7 +7,7 @@ export const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
     },
     heroImageWrap: {
-      backgroundColor: colors.secondarySoft,
+      backgroundColor: colors.photoStage,
       alignItems: 'center',
       justifyContent: 'center',
       padding: 12,
@@ -37,6 +37,21 @@ export const makeStyles = (colors: ThemeColors) =>
       color: colors.txt,
       fontSize: 11,
       fontWeight: '700',
+    },
+    codeChip: {
+      backgroundColor: colors.bg,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderWidth: 1,
+      borderColor: colors.line,
+    },
+    codeText: { color: colors.txt, fontSize: 12, fontWeight: '800', letterSpacing: 0.4 },
+    statusBox: {
+      borderWidth: 1,
+      borderColor: colors.line,
+      borderRadius: 12,
+      padding: 12,
     },
     muted: {
       color: colors.muted,

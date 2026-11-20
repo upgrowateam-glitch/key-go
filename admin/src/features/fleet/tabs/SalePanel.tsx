@@ -113,7 +113,9 @@ export function SalePanel({ v }: { v: Vehicle }) {
             <Badge label={`Currently ${v.status} — complete or cancel the booking first`} tone="warning" />
           </View>
         ) : null}
-        <Button label="Sell vehicle" variant="danger" disabled={busy} icon={(c) => <Tag size={14} color={c} />} onPress={() => setOpen(true)} />
+        <View style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+          <Button label="Sell vehicle" variant="danger" disabled={busy} icon={(c) => <Tag size={14} color={c} />} onPress={() => setOpen(true)} />
+        </View>
       </Card>
 
       <FormSheet
