@@ -57,12 +57,20 @@ rclone delete "${KEYGO_REMOTE}db" --min-age "${KEEP_REMOTE_DAYS}d"
 # ---------------------------------------------------------------- 2. uploaded files (photos, documents, signatures)
 volume_dir() { docker volume inspect -f '{{ .Mountpoint }}' "$1" 2>/dev/null || true; }
 
+# Removes copies of deleted files older than the keep period. The folder only exists once something
+# has been deleted in KeyGo, so a missing folder is normal and not an error.
+prune_deleted() {
+  if rclone lsf "$1" --max-depth 1 >/dev/null 2>&1; then
+    rclone delete "$1" --min-age "${KEEP_REMOTE_DAYS}d"
+    rclone rmdirs "$1" --leave-root || true
+  fi
+}
+
 FILES_DIR="$(volume_dir keygo_keygo-storage)"
 if [ -n "$FILES_DIR" ] && [ -d "$FILES_DIR" ]; then
   log "Uploading new and changed files…"
   rclone sync "$FILES_DIR" "${KEYGO_REMOTE}files" --backup-dir "${KEYGO_REMOTE}files-deleted/$TODAY"
-  rclone delete "${KEYGO_REMOTE}files-deleted" --min-age "${KEEP_REMOTE_DAYS}d"
-  rclone rmdirs "${KEYGO_REMOTE}files-deleted" --leave-root || true
+  prune_deleted "${KEYGO_REMOTE}files-deleted"
 else
   log "WARNING: volume keygo_keygo-storage not found; files skipped"
 fi
@@ -72,8 +80,7 @@ GPS_DIR="$(volume_dir keygo_keygo-traccar-data)"
 if [ -n "$GPS_DIR" ] && [ -d "$GPS_DIR" ]; then
   log "Uploading GPS data…"
   rclone sync "$GPS_DIR" "${KEYGO_REMOTE}gps" --backup-dir "${KEYGO_REMOTE}gps-deleted/$TODAY"
-  rclone delete "${KEYGO_REMOTE}gps-deleted" --min-age "${KEEP_REMOTE_DAYS}d"
-  rclone rmdirs "${KEYGO_REMOTE}gps-deleted" --leave-root || true
+  prune_deleted "${KEYGO_REMOTE}gps-deleted"
 fi
 
 log "Backup finished."
