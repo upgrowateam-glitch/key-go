@@ -121,6 +121,7 @@ interface AppContextType {
   completeRental: (bookingId: string, settlement: SettlementInput) => void;
   toggleKeylessUnlock: (bookingId: string) => void;
   extendRental: (bookingId: string, extraDays: number) => void;
+  showBooking: (b: Partial<Booking> & { id: string }) => void;
 
   // Customers
   customers: Customer[];
@@ -252,7 +253,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   });
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   // bookingsRef: latest bookings, including ones created earlier in the same event handler (e.g. quote → confirm)
-  const [bookings, setBookings, bookingsRef] = useSyncedList<Booking>(seed.bookings, {
+  const [bookings, setBookings, bookingsRef, setBookingsLocal] = useSyncedList<Booking>(seed.bookings, {
     keyOf: (b) => b.id,
     save: (b) => api(`/admin/bookings/${enc(b.id)}`, { method: 'PUT', body: b }),
     onError: onSaveError,
@@ -285,6 +286,13 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   const setRole = (newRole: UserRole) => {
     setRoleState(newRole);
     showToast(`Switched to ${newRole === 'customer' ? 'Customer view' : 'Admin & staff view'}`);
+  };
+
+  /** Shows the server's copy of a booking after an extension (already saved there; not saved again). */
+  const showBooking = (b: Partial<Booking> & { id: string }) => {
+    const keys = ['returnDate', 'returnTime', 'days', 'subtotal', 'tax', 'totalAmount', 'extensions', 'extraHours', 'extensionCharges'] as const;
+    const pick = Object.fromEntries(keys.filter((k) => k in b).map((k) => [k, b[k]])) as Partial<Booking>;
+    setBookingsLocal(bookingsRef.current.map((x) => (x.id === b.id ? { ...x, ...pick } : x)));
   };
 
   const patchBooking = (id: string, patch: Partial<Booking>) =>
@@ -696,6 +704,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         completeRental,
         toggleKeylessUnlock,
         extendRental,
+        showBooking,
         customers,
         addCustomer,
         updateCustomer,

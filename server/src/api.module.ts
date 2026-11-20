@@ -6,6 +6,8 @@ import { CustomerDocumentsController, IdentityController, PublicIdentityLinksCon
 import { IdentityLinksService } from './identity/identity-links.service';
 import { IdentityService } from './identity/identity.service';
 import { DriverPayController } from './payroll/driver-pay.controller';
+import { ExtensionsController } from './admin/extensions.controller';
+import { ExtensionsService } from './domain/extensions.service';
 import { DriverPayService } from './payroll/driver-pay.service';
 import { PhotoLinksService, PublicPhotoLinksController, VehiclePhotoLinksController } from './admin/vehicle-photo-links';
 import { UsersController } from './admin/users.controller';
@@ -23,7 +25,7 @@ import { StaffSyncService } from './domain/staff-sync.service';
 
 /** The REST API used by the admin portal (/admin) and the customer app (/me, /public). */
 @Module({
-  controllers: [AdminController, UsersController, FilesController, DriverController, WhatsAppController, GpsController, MeController, PublicController, VehiclePhotosController, VehiclePhotoLinksController, PublicPhotoLinksController, IdentityController, PublicIdentityLinksController, CustomerDocumentsController, DriverPayController],
-  providers: [StoreService, BookingsService, WhatsAppService, StaffSyncService, TraccarService, PhotoLinksService, AuditService, IdentityService, IdentityLinksService, DriverPayService],
+  controllers: [AdminController, UsersController, FilesController, DriverController, WhatsAppController, GpsController, MeController, PublicController, VehiclePhotosController, VehiclePhotoLinksController, PublicPhotoLinksController, IdentityController, PublicIdentityLinksController, CustomerDocumentsController, DriverPayController, ExtensionsController],
+  providers: [StoreService, BookingsService, WhatsAppService, StaffSyncService, TraccarService, PhotoLinksService, AuditService, IdentityService, IdentityLinksService, DriverPayService, ExtensionsService],
 })
 export class ApiModule {}

@@ -79,7 +79,8 @@ interface AppContextType {
   payBooking: (bookingId: string) => void;
   signAgreement: (bookingId: string, input: SignAgreementInput) => Agreement;
   toggleKeylessUnlock: (bookingId: string) => void;
-  extendRental: (bookingId: string, extraDays: number) => void;
+  /** Shows the server's copy of a booking after an extension request. */
+  showBooking: (b: Booking) => void;
 
   // Account
   customers: Customer[];
@@ -335,15 +336,10 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
     showToast(next ? 'Car unlocked · digital key active' : 'Car locked');
   };
 
-  const extendRental = (bookingId: string, extraDays: number) => {
-    const b = findBooking(bookingId);
-    if (!b) return;
-    const days = b.days + extraDays;
-    const vehicle = vehiclesRef.current.find((v) => v.id === b.vehicleId) ?? vehiclesRef.current[0];
-    const q = computeQuote(vehicle, days, b.term, 0);
-    patchBooking(bookingId, { days, returnDate: addDays(b.returnDate, extraDays), subtotal: q.subtotal, tax: q.tax, totalAmount: q.total });
-    sendBookingAction(bookingId, '/extend', { extraDays }, () => putBooking(bookingId, b));
-    showToast(`Extension requested · new return ${addDays(b.returnDate, extraDays)}`);
+  const showBooking = (saved: Booking) => {
+    const keys = ['returnDate', 'returnTime', 'days', 'subtotal', 'tax', 'totalAmount', 'extensions', 'extraHours', 'extensionCharges'] as const;
+    const pick = Object.fromEntries(keys.filter((k) => k in saved).map((k) => [k, saved[k]])) as Partial<Booking>;
+    patchBooking(saved.id, pick);
   };
 
   // ---------- Account ----------
@@ -405,7 +401,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         payBooking,
         signAgreement,
         toggleKeylessUnlock,
-        extendRental,
+        showBooking,
         customers,
         refreshMe,
         updateCustomer,

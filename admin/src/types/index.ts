@@ -120,6 +120,28 @@ export type BookingStatus = 'Quoted' | 'Pending' | 'Confirmed' | 'Active' | 'Com
 export type BookingClassification = 'Online' | 'Walk-in' | 'Corporate' | 'Repeat customer' | 'Referral';
 export type PaymentStatus = 'Unpaid' | 'Deposit paid' | 'Paid' | 'Refunded';
 
+export interface BookingExtension {
+  id: string;
+  unit: 'hours' | 'days';
+  amount: number;
+  fromReturnDate: string;
+  fromReturnTime: string;
+  toReturnDate: string;
+  toReturnTime: string;
+  extraRent: number;
+  extraDriver: number;
+  extraSubtotal: number;
+  extraTax: number;
+  extraTotal: number;
+  status: 'Requested' | 'Approved' | 'Declined';
+  requestedBy: string;
+  requestedByRole?: string;
+  requestedAt: string;
+  decidedBy?: string;
+  decidedAt?: string;
+  declineReason?: string;
+}
+
 export interface Booking {
   id: string;
   customerId?: string;
@@ -154,6 +176,12 @@ export interface Booking {
   reminderSent?: boolean;
   keylessUnlocked?: boolean;
   driverId?: string;
+  /** Extensions of the rental (hours or days), newest last. */
+  extensions?: BookingExtension[];
+  /** Hours added by approved hour extensions (days are added to days). */
+  extraHours?: number;
+  /** Total of approved extension charges (incl. tax), already in totalAmount. */
+  extensionCharges?: number;
   agreementId?: string;
   pickupInspectionId?: string;
   returnInspectionId?: string;

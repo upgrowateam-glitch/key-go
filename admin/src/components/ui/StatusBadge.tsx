@@ -8,6 +8,7 @@ export function statusTone(status: string): Tone {
     case 'confirmed':
     case 'completed':
     case 'verified':
+    case 'approved':
     case 'paid':
     case 'refunded':
     case 'done':
@@ -21,6 +22,7 @@ export function statusTone(status: string): Tone {
       return 'success';
     case 'reserved':
     case 'pending':
+    case 'requested':
     case 'quoted':
     case 'scheduled':
     case 'upcoming':
@@ -47,6 +49,7 @@ export function statusTone(status: string): Tone {
       return 'warning';
     case 'sold':
     case 'cancelled':
+    case 'declined':
     case 'overdue':
     case 'failed':
     case 'rejected':

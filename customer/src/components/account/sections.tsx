@@ -1,6 +1,7 @@
 import React, { ReactNode, useState } from 'react';
 import { AppState, Linking, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { api } from '../../lib/api';
+import { extensionLabel, extensionSummary } from '../../lib/extensions';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
@@ -648,7 +649,8 @@ function InvoicesBody() {
           `${me.name}`,
           `${b.vehicleName} (${b.vehicleNumber})`,
           `${formatDate(b.pickupDate)} – ${formatDate(b.returnDate)} · ${b.days} day(s)`,
-          `Rental: ${formatINR(b.subtotal)}`,
+          `Rental: ${formatINR(b.subtotal - extensionSummary(b).subtotal)}`,
+          extensionSummary(b).approved.length ? `Extensions (${extensionSummary(b).approved.map(extensionLabel).join(', ')}): ${formatINR(extensionSummary(b).subtotal)}` : '',
           `GST: ${formatINR(b.tax)}`,
           `Total: ${formatINR(b.totalAmount)}`,
           `Deposit: ${formatINR(b.depositAmount)}`,
@@ -671,7 +673,8 @@ function InvoicesBody() {
             {open === b.id ? (
               <>
                 <Divider />
-                <Row label="Rental (before tax)" value={formatINR(b.subtotal)} />
+                <Row label="Rental (before tax)" value={formatINR(b.subtotal - extensionSummary(b).subtotal)} />
+                {extensionSummary(b).approved.length ? <Row label={`Extensions (${extensionSummary(b).approved.map(extensionLabel).join(', ')})`} value={formatINR(extensionSummary(b).subtotal)} /> : null}
                 {b.discount ? <Row label="Discounts" value={`− ${formatINR(b.discount)}`} /> : null}
                 <Row label="GST" value={formatINR(b.tax)} />
                 <Row label="Rental total" value={formatINR(b.totalAmount)} strong />

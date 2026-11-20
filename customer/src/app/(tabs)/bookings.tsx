@@ -44,9 +44,9 @@ import {
 } from '../../components/kit';
 import { useResponsive } from '../../hooks/useResponsive';
 import { RENTAL_STEPS, currentStepIndex, elapsedDays, isOverdue, reminderState } from '../../lib/lifecycle';
-import { computeQuote } from '../../lib/pricing';
 import { addDays, daysBetween, formatDate, formatINR, formatKm } from '../../lib/format';
 import { Booking, Vehicle } from '../../types';
+import { extensionLabel, extensionSummary, quoteExtension, requestExtension, type ExtensionQuote, type ExtensionUnit } from '../../lib/extensions';
 
 
 const TRIP_ROUTE = [
@@ -62,8 +62,8 @@ const PAY_METHODS = ['UPI', 'Card', 'Net banking', 'Wallet'] as const;
 type PayMethod = (typeof PAY_METHODS)[number];
 const BANKS = ['HDFC', 'ICICI', 'SBI', 'Axis', 'Kotak'] as const;
 const WALLETS = ['Paytm', 'PhonePe', 'Amazon Pay', 'Mobikwik'] as const;
-const EXTEND_OPTIONS = ['1', '2', '3'] as const;
-type ExtendOption = (typeof EXTEND_OPTIONS)[number];
+const EXTEND_UNITS = ['Hours', 'Days'] as const;
+const EXTEND_MAX = { hours: 23, days: 60 } as const;
 const ROADSIDE_ISSUES = ['Flat tyre', 'Battery / won’t start', 'Accident', 'Locked out', 'Other'] as const;
 type RoadsideIssue = (typeof ROADSIDE_ISSUES)[number];
 
@@ -82,7 +82,6 @@ export default function MyBookingsScreen() {
   const [sheet, setSheet] = useState<Sheet>(null);
   // Simulated payments & extension balances (no backend yet)
   const [paidLocal, setPaidLocal] = useState<Record<string, number>>({});
-  const [extensionDue, setExtensionDue] = useState<Record<string, number>>({});
 
   const me = customers.find((c) => c.id === currentCustomerId);
   const mine = useMemo(() => bookings.filter((b) => b.customerId === currentCustomerId), [bookings, currentCustomerId]);
@@ -98,7 +97,7 @@ export default function MyBookingsScreen() {
 
   const amountDue = (b: Booking) => {
     const base = b.paymentStatus === 'Unpaid' ? b.totalAmount + b.depositAmount : b.paymentStatus === 'Deposit paid' ? b.totalAmount : 0;
-    return Math.max(0, base + (extensionDue[b.id] ?? 0) - (paidLocal[b.id] ?? 0));
+    return Math.max(0, base - (paidLocal[b.id] ?? 0));
   };
   const amountPaid = (b: Booking) => {
     const base = b.paymentStatus === 'Paid' ? b.totalAmount + b.depositAmount : b.paymentStatus === 'Deposit paid' ? b.depositAmount : 0;
@@ -185,12 +184,7 @@ export default function MyBookingsScreen() {
       </View>
 
       {sheet?.kind === 'extend' ? (
-        <ExtendSheet
-          booking={sheet.booking}
-          vehicle={vehicleOf(sheet.booking)}
-          onClose={() => setSheet(null)}
-          onExtended={(extra) => setExtensionDue((prev) => ({ ...prev, [sheet.booking.id]: (prev[sheet.booking.id] ?? 0) + extra }))}
-        />
+        <ExtendSheet booking={sheet.booking} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.kind === 'roadside' ? <RoadsideSheet booking={sheet.booking} vehicle={vehicleOf(sheet.booking)} onClose={() => setSheet(null)} /> : null}
       {sheet?.kind === 'pay' ? (
@@ -337,8 +331,9 @@ function ActiveTripCard({
       )}
 
       <Divider style={{ marginVertical: 16 }} />
+      <ExtensionStatus booking={b} />
       <View style={styles.actionsRow}>
-        <Button label="Extend trip" variant="primary" onPress={onExtend} icon={(c) => <CalendarPlus size={16} color={c} />} />
+        <Button label={extensionSummary(b).pending ? 'Extension requested' : 'Extend trip'} variant="primary" disabled={!!extensionSummary(b).pending} onPress={onExtend} icon={(c) => <CalendarPlus size={16} color={c} />} />
         <Button label="Track my car" variant="outline" onPress={() => router.push(`/rental/${encodeURIComponent(b.id)}/track` as any)} icon={(c) => <MapPin size={16} color={c} />} />
         <Button label="Details" variant="outline" onPress={() => router.push(`/rental/${encodeURIComponent(b.id)}` as any)} />
         <Button label="Roadside help" variant="outline" onPress={onRoadside} icon={(c) => <LifeBuoy size={16} color={c} />} />
@@ -474,13 +469,77 @@ function PastTripRow({ booking: b, vehicle, first, onReceipt }: { booking: Booki
 
 // ------------------------------------------------------------------ Sheets
 
-function ExtendSheet({ booking: b, vehicle, onClose, onExtended }: { booking: Booking; vehicle?: Vehicle; onClose: () => void; onExtended: (extraAmount: number) => void }) {
+/** The latest extension request: waiting, approved or declined (with the reason). */
+function ExtensionStatus({ booking: b }: { booking: Booking }) {
+  const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
-  const { extendRental } = useApp();
-  const [extra, setExtra] = useState<ExtendOption>('1');
-  const n = Number(extra);
-  const newQuote = vehicle ? computeQuote(vehicle, b.days + n, b.term) : null;
-  const diff = newQuote ? Math.max(0, newQuote.total - b.totalAmount) : 0;
+  const { pending, last } = extensionSummary(b);
+  const e = pending ?? last;
+  if (!e) return null;
+  const tone = e.status === 'Approved' ? colors.success : e.status === 'Declined' ? colors.danger : colors.warmText;
+  return (
+    <View style={{ borderWidth: 1, borderColor: tone, borderRadius: 12, padding: 10, marginBottom: 12 }}>
+      <Text style={[styles.blockTitle, { color: tone, marginBottom: 2 }]}>
+        {e.status === 'Requested' ? 'Extension requested · waiting for KeyGo' : e.status === 'Approved' ? 'Extension approved' : 'Extension declined'}
+      </Text>
+      <Text style={styles.metaText}>
+        {e.status === 'Declined'
+          ? `${extensionLabel(e)} was not possible: ${e.declineReason ?? ''}. Please return on ${formatDate(e.fromReturnDate)}, ${e.fromReturnTime}.`
+          : `${extensionLabel(e)} · return ${formatDate(e.toReturnDate)}, ${e.toReturnTime} · +${formatINR(e.extraTotal)}${e.status === 'Requested' ? '. The car is kept for you until KeyGo answers.' : ''}`}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * Ask for more time: by hours or by days (24 hours each). The price comes from the car's daily price (an hour is a
+ * tenth of a day, never more than a day). KeyGo approves the request; the car is held for you meanwhile.
+ */
+function ExtendSheet({ booking: b, onClose }: { booking: Booking; onClose: () => void }) {
+  const colors = useThemeColors();
+  const styles = useThemedStyles(makeStyles);
+  const { showBooking, showToast } = useApp();
+  const [unit, setUnit] = useState<ExtensionUnit>('hours');
+  const [amount, setAmount] = useState(2);
+  // Answers are kept with the choice they belong to, so an old price never shows for a new choice
+  const [answer, setAnswer] = useState<{ key: string; quote?: ExtensionQuote; error?: string } | null>(null);
+  const key = `${unit}:${amount}`;
+  const quote = answer?.key === key ? (answer.quote ?? null) : null;
+  const [sendError, setSendError] = useState('');
+  const error = sendError || (answer?.key === key ? (answer.error ?? '') : '');
+  const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    let live = true;
+    const k = `${unit}:${amount}`;
+    const t = setTimeout(() => {
+      quoteExtension(b.id, unit, amount).then(
+        (q) => live && setAnswer({ key: k, quote: q }),
+        (e: Error) => live && setAnswer({ key: k, error: e.message })
+      );
+    }, 200);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [b.id, unit, amount]);
+
+  const change = (by: number) => {
+    setSendError('');
+    setAmount((n) => Math.max(1, Math.min(EXTEND_MAX[unit], n + by)));
+  };
+  const send = async () => {
+    setBusy(true);
+    try {
+      showBooking(await requestExtension(b.id, unit, amount));
+      showToast('Extension requested · KeyGo will confirm shortly');
+      onClose();
+    } catch (e) {
+      setSendError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <FormSheet
@@ -490,28 +549,46 @@ function ExtendSheet({ booking: b, vehicle, onClose, onExtended }: { booking: Bo
       footer={
         <>
           <Button label="Cancel" variant="ghost" onPress={onClose} />
-          <Button
-            label={`Extend by ${n} ${n === 1 ? 'day' : 'days'}`}
-            onPress={() => {
-              extendRental(b.id, n);
-              onExtended(diff);
-              onClose();
-            }}
-          />
+          <Button label={busy ? 'Sending…' : 'Request extension'} disabled={!quote?.available || busy} onPress={send} icon={(c) => <CalendarPlus size={16} color={c} />} />
         </>
       }>
-      <Text style={styles.sheetLead}>How many extra days do you need {b.vehicleName} for?</Text>
-      <SegmentedControl options={EXTEND_OPTIONS} value={extra} onChange={setExtra} labels={{ '1': '+1 day', '2': '+2 days', '3': '+3 days' }} />
-      <View style={{ marginTop: 16 }}>
-        <SheetLine label="Current return" value={`${formatDate(b.returnDate)}, ${b.returnTime}`} />
-        <SheetLine label="New return" value={`${formatDate(addDays(b.returnDate, n))}, ${b.returnTime}`} strong />
-        <SheetLine label="Trip length" value={`${b.days} → ${b.days + n} days`} />
-        <Divider />
-        <SheetLine label="Current total" value={formatINR(b.totalAmount)} />
-        <SheetLine label="New estimated total" value={newQuote ? formatINR(newQuote.total) : 'Configurable'} strong />
-        <SheetLine label="Additional amount" value={formatINR(diff)} />
+      <Text style={styles.sheetLead}>How much more time do you need {b.vehicleName} for?</Text>
+      <SegmentedControl
+        options={EXTEND_UNITS}
+        value={unit === 'hours' ? 'Hours' : 'Days'}
+        onChange={(u) => {
+          const next = u === 'Hours' ? 'hours' : 'days';
+          setUnit(next);
+          setAmount((n) => Math.min(EXTEND_MAX[next], n));
+        }}
+      />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 14 }}>
+        <Button label="−" variant="outline" disabled={amount <= 1} onPress={() => change(-1)} />
+        <Text style={[styles.amount, { minWidth: 120, textAlign: 'center' }]} accessibilityLiveRegion="polite">
+          {amount} {unit === 'hours' ? (amount === 1 ? 'hour' : 'hours') : amount === 1 ? 'day' : 'days'}
+        </Text>
+        <Button label="+" variant="outline" disabled={amount >= EXTEND_MAX[unit]} onPress={() => change(1)} />
       </View>
-      <SimulatedNote>Extension is subject to availability. The added amount can be paid online from this screen.</SimulatedNote>
+      {unit === 'hours' ? <Text style={[styles.metaText, { textAlign: 'center', marginTop: 4 }]}>Up to 23 hours. For a day or more, choose Days.</Text> : null}
+      <View style={{ marginTop: 16, minHeight: 150 }}>
+        <SheetLine label="Current return" value={`${formatDate(b.returnDate)}, ${b.returnTime}`} />
+        {quote ? (
+          <>
+            <SheetLine label="New return" value={`${formatDate(quote.newReturnDate)}, ${quote.newReturnTime}`} strong />
+            <Divider />
+            <SheetLine label="Rent" value={formatINR(quote.extraRent)} />
+            {quote.extraDriver ? <SheetLine label="Driver" value={formatINR(quote.extraDriver)} /> : null}
+            <SheetLine label="Tax" value={formatINR(quote.extraTax)} />
+            <SheetLine label="Extra to pay" value={formatINR(quote.extraTotal)} strong />
+            <Text style={[styles.metaText, { marginTop: 6 }]}>{quote.explain}</Text>
+            {!quote.available ? <Text style={{ color: colors.danger, fontSize: 13, fontWeight: '700', marginTop: 8 }}>{quote.problem}</Text> : null}
+          </>
+        ) : error ? null : (
+          <Text style={[styles.metaText, { marginTop: 8 }]}>Checking the price and that the car is free…</Text>
+        )}
+        {error ? <Text style={{ color: colors.danger, fontSize: 13, marginTop: 8 }}>{error}</Text> : null}
+      </View>
+      <Text style={[styles.metaText, { marginTop: 8 }]}>KeyGo confirms your request. The car is kept for you meanwhile; you pay the extra when it is approved.</Text>
     </FormSheet>
   );
 }
@@ -653,7 +730,8 @@ function ReceiptSheet({ booking: b, onClose }: { booking: Booking; onClose: () =
       </View>
 
       <Text style={styles.blockTitle}>Rental charges</Text>
-      <SheetLine label={`${formatINR(b.baseRatePerDay)} × ${b.days} days (${b.term})`} value={formatINR(b.baseRatePerDay * b.days)} />
+      <SheetLine label={`${formatINR(b.baseRatePerDay)} × ${Math.max(1, b.days - extensionSummary(b).days)} days (${b.term})`} value={formatINR(b.baseRatePerDay * Math.max(1, b.days - extensionSummary(b).days))} />
+      {extensionSummary(b).approved.length ? <SheetLine label={`Extensions (${extensionSummary(b).approved.map(extensionLabel).join(', ')})`} value={formatINR(extensionSummary(b).subtotal)} /> : null}
       {b.discount > 0 ? <SheetLine label="Discounts" value={formatINR(-b.discount)} /> : null}
       <SheetLine label="Tax" value={formatINR(b.tax)} />
       <SheetLine label="Rental total" value={formatINR(b.totalAmount)} strong />

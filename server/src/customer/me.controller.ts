@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Patch, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCode, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { CurrentUser, CustomerOnly, type AuthPayload } from '../auth/auth.decorators';
@@ -13,6 +13,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normaliseLicence } from '../domain/licence';
 import { actorOf } from '../identity/audit.service';
 import { IdentityService } from '../identity/identity.service';
+import { ExtensionsService } from '../domain/extensions.service';
 
 class CreateBookingDto {
   /** Optional id chosen by the app, so it can show the booking before the server answers. */
@@ -28,7 +29,10 @@ class CreateBookingDto {
 }
 
 class ExtendDto {
-  @IsInt() @Min(1) @Max(60) extraDays: number;
+  @IsOptional() @IsIn(['hours', 'days']) unit?: 'hours' | 'days';
+  @IsOptional() @IsInt() @Min(1) @Max(60) amount?: number;
+  /** Older app versions: whole days. */
+  @IsOptional() @IsInt() @Min(1) @Max(60) extraDays?: number;
 }
 
 class SignDto {
@@ -51,6 +55,7 @@ export class MeController {
     private readonly store: StoreService,
     private readonly bookings: BookingsService,
     private readonly identity: IdentityService,
+    private readonly extensions: ExtensionsService,
   ) {}
 
   /** The customer's own documents (status only; staff names left out). */
@@ -215,28 +220,21 @@ export class MeController {
     return saved;
   }
 
+  @Get('bookings/:id/extend-quote')
+  @ApiOperation({ summary: 'Price and availability of extending your rental by ?unit=hours|days&amount=n' })
+  async extendQuote(@CurrentUser() me: AuthPayload, @Param('id') id: string, @Query('unit') unit: string, @Query('amount') amount: string) {
+    await this.ownBooking(me, id);
+    return this.extensions.quote(id, unit, amount);
+  }
+
   @Post('bookings/:id/extend')
   @HttpCode(200)
-  @ApiOperation({ summary: 'Extend a confirmed or active rental by some days (409 if the car is booked after it)' })
+  @ApiOperation({ summary: 'Ask KeyGo to extend your rental by hours or days; the car is held while staff decide (409 if it is booked after you)' })
   async extend(@CurrentUser() me: AuthPayload, @Param('id') id: string, @Body() body: ExtendDto) {
-    const b = await this.ownBooking(me, id);
-    if (b.status !== 'CONFIRMED' && b.status !== 'ACTIVE') throw new BadRequestException('Only an upcoming or active rental can be extended.');
-    const current = bookingToApi(b);
-    const vehicle = await this.bookings.vehicleWithRates(b.vehicleId);
-    const rules = await this.bookings.pricing();
-    const rates = this.bookings.ratesFor(vehicle, rules)!;
-    const days = b.days + body.extraDays;
-    const q = computeQuote(rates, days, current.term as Term, 0, rules.taxRate);
-    const saved = await this.bookings.patchBooking(id, {
-      days,
-      returnDate: addDays(current.returnDate as string, body.extraDays),
-      subtotal: q.subtotal,
-      discount: q.manualDiscount + q.termDiscount,
-      tax: q.tax,
-      totalAmount: q.total,
-    });
-    await this.store.notify({ type: 'return', title: 'Rental extended', message: `${b.customerName} extended ${id} by ${body.extraDays} day(s); new return ${saved?.returnDate}.` });
-    return saved;
+    await this.ownBooking(me, id);
+    const unit = body.unit ?? 'days';
+    const amount = body.amount ?? body.extraDays;
+    return this.extensions.request(id, unit, amount, actorOf(me));
   }
 
   @Post('bookings/:id/keyless')

@@ -30,6 +30,12 @@ import { findConflicts } from '../../lib/availability';
 import { daysBetween, formatDate, formatINR, formatKm } from '../../lib/format';
 import { RENTAL_STEPS, currentStepIndex, elapsedDays, isOverdue, reminderState } from '../../lib/lifecycle';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
+import { useStaffSession } from '../../components/portal/PortalShell';
+import { canAccess } from '../../services/auth';
+import { extensionLabel, extensionSummary } from '../../services/extensions';
+import { ExtendRentalSheet } from './ExtendRentalSheet';
+import { ExtensionsCard } from './ExtensionsCard';
+import type { Booking } from '../../types';
 
 export default function RentalHubScreen() {
   const colors = useThemeColors();
@@ -39,6 +45,9 @@ export default function RentalHubScreen() {
   const bookingId = decodeURIComponent(id ?? '');
   const { bookings, vehicles, inspections, agreements, fastagLogs, confirmBooking, cancelBooking, completeRental, role, today } = useApp();
   const { cols } = useResponsive();
+  const { session } = useStaffSession();
+  const canEditBookings = canAccess(session, 'bookings', 'edit');
+  const [extending, setExtending] = useState(false);
 
   const booking = bookings.find((b) => b.id === bookingId);
   const vehicle = vehicles.find((v) => v.id === booking?.vehicleId);
@@ -252,6 +261,9 @@ export default function RentalHubScreen() {
             <Section title="Next step" style={{ marginTop: 16 }}>
               {nextCard()}
             </Section>
+            <Section title="Extensions">
+              <ExtensionsCard booking={booking} canEdit={canEditBookings} onExtend={() => setExtending(true)} />
+            </Section>
             <Section title="Records">
               <Card padded={false}>
                 <RecordRow
@@ -296,9 +308,10 @@ export default function RentalHubScreen() {
               <Line label="Phone" value={booking.customerPhone || '—'} />
               <Line label="Reservation date" value={formatDate(booking.createdAt)} />
               <Line label="Pickup" value={`${formatDate(booking.pickupDate, false)} · ${booking.pickupTime}`} />
-              <Line label="Return" value={`${formatDate(booking.returnDate, false)} · ${booking.returnTime}`} />
+              <Line label="Return" value={`${formatDate(booking.returnDate, false)} · ${booking.returnTime}${extensionSummary(booking).approved.length ? ' (extended)' : ''}`} />
+              {extensionSummary(booking).pending ? <Line label="Extension asked" value={`${extensionLabel(extensionSummary(booking).pending!)} · waiting for you`} /> : null}
               <Line label="Pickup location" value={booking.pickupLocation} />
-              <Line label="Term · days" value={`${booking.term} · ${booking.days}`} />
+              <Line label="Term · days" value={`${booking.term} · ${booking.days}${booking.extraHours ? ` days + ${booking.extraHours} h` : ''}`} />
               <Line label="Purpose" value={booking.purpose} />
               <Line label="Classification" value={booking.classification} />
               <Line label="Payment" value={booking.paymentStatus} />
@@ -321,6 +334,7 @@ export default function RentalHubScreen() {
           </Section>
         }
       />
+      {extending ? <ExtendRentalSheet booking={booking} onClose={() => setExtending(false)} /> : null}
       <ConfirmDialog
         visible={pendingAction !== null}
         title={pendingAction === 'confirm' ? 'Confirm this booking?' : 'Cancel this quote?'}
@@ -338,10 +352,14 @@ export default function RentalHubScreen() {
   );
 }
 
-function QuoteLines({ booking }: { booking: { baseRatePerDay: number; days: number; discount: number; subtotal: number; tax: number; totalAmount: number; depositAmount: number } }) {
+function QuoteLines({ booking }: { booking: Booking }) {
+  // Extension days are charged separately (their own line), so the base line shows the original days
+  const ext = extensionSummary(booking);
+  const baseDays = Math.max(1, booking.days - ext.days);
   return (
     <View style={{ marginTop: 8 }}>
-      <Line label={`${formatINR(booking.baseRatePerDay)} × ${booking.days} days`} value={formatINR(booking.baseRatePerDay * booking.days)} />
+      <Line label={`${formatINR(booking.baseRatePerDay)} × ${baseDays} days`} value={formatINR(booking.baseRatePerDay * baseDays)} />
+      {ext.approved.length ? <Line label={`Extensions (${ext.approved.map(extensionLabel).join(', ')})`} value={formatINR(ext.subtotal)} /> : null}
       {booking.discount ? <Line label="Discounts" value={`− ${formatINR(booking.discount)}`} /> : null}
       <Line label="GST (18%)" value={formatINR(booking.tax)} />
       <Line label="Total" value={formatINR(booking.totalAmount)} strong />

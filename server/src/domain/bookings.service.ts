@@ -165,7 +165,8 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Creates or replaces a booking. Overlapping confirmed/active bookings are rejected with 409. */
-  async saveBooking(id: string, body: Json) {
+  async saveBooking(id: string, bodyIn: Json) {
+    const body = await this.keepExtensions(id, bodyIn);
     const data = bookingFromApi(body);
     await this.checkDriver(id, data);
     const previous = await this.prisma.booking.findUnique({ where: { id }, select: { vehicleId: true } });
@@ -208,6 +209,29 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
       select: { id: true },
     });
     if (clash) throw new ConflictException(`${name} is already driving booking ${clash.id} at that time. Choose another driver.`);
+  }
+
+  /**
+   * Extensions are changed only through their own routes. A screen saving an older copy of the booking (made
+   * before an extension) must not undo it: keep the stored return time, money and extensions.
+   */
+  private async keepExtensions(id: string, body: Json): Promise<Json> {
+    const prev = await this.prisma.booking.findUnique({ where: { id } });
+    if (!prev) return body;
+    const stored = bookingToApi(prev);
+    const count = (b: Json) => (Array.isArray(b.extensions) ? b.extensions.length : 0);
+    if (count(stored) <= count(body)) return body;
+    const keep = ['returnDate', 'returnTime', 'days', 'subtotal', 'tax', 'totalAmount', 'extensions', 'extraHours', 'extensionCharges'];
+    return { ...body, ...Object.fromEntries(keep.filter((k) => k in stored).map((k) => [k, stored[k]])) };
+  }
+
+  /** The next confirmed or active booking of a car that is still running or starts after the given time. */
+  nextBookingOfVehicle(vehicleId: string, exceptBookingId: string, from: Date) {
+    return this.prisma.booking.findFirst({
+      where: { vehicleId, id: { not: exceptBookingId }, status: { in: ['CONFIRMED', 'ACTIVE'] }, returnAt: { gt: from } },
+      orderBy: { pickupAt: 'asc' },
+      select: { id: true, pickupAt: true },
+    });
   }
 
   /** Applies changes to a stored booking (columns and display fields) and saves it through the same rules. */

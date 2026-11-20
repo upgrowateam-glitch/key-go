@@ -11,6 +11,7 @@ import { isOverdue } from '../../lib/lifecycle';
 import { useResource } from '../../services/mockClient';
 import { ContactOutcome, loadContactLog, logContact } from '../../services/tracking';
 import type { Booking } from '../../types';
+import { ExtendRentalSheet } from '../rental/ExtendRentalSheet';
 import { FilterGroup, ListToolbar, Pager, parseAmount, useCommonStyles, usePaged } from '../agreements/listTools';
 
 const OUTCOMES: ContactOutcome[] = ['Reached', 'No answer', 'Promised return', 'Escalated'];
@@ -21,7 +22,7 @@ export default function OverdueRentalsTab() {
   const styles = useCommonStyles();
   const router = useRouter();
   const { cols, isPhone } = useResponsive();
-  const { bookings, today, extendRental, showToast } = useApp();
+  const { bookings, today, showToast } = useApp();
   const res = useResource(loadContactLog);
 
   const [query, setQuery] = useState('');
@@ -31,10 +32,6 @@ export default function OverdueRentalsTab() {
   const [note, setNote] = useState('');
   const [by, setBy] = useState('');
   const [errors, setErrors] = useState<{ note?: string; by?: string }>({});
-  const [extendFor, setExtendFor] = useState<Booking | null>(null);
-  const [extraDays, setExtraDays] = useState('1');
-  const [daysError, setDaysError] = useState<string>();
-  const [confirmExtend, setConfirmExtend] = useState<{ booking: Booking; days: number } | null>(null);
 
   const lateDays = (b: Booking) => daysBetween(b.returnDate, today);
   const lateCharge = (b: Booking) => lateDays(b) * b.baseRatePerDay;
@@ -79,19 +76,8 @@ export default function OverdueRentalsTab() {
       (err: Error) => showToast(err.message)
     );
   };
-  const openExtend = (b: Booking) => {
-    setExtraDays(String(Math.max(1, lateDays(b))));
-    setDaysError(undefined);
-    setExtendFor(b);
-  };
-  const reviewExtend = () => {
-    if (!extendFor) return;
-    const n = parseAmount(extraDays);
-    if (!(n >= 1) || !Number.isInteger(n)) return setDaysError('Enter a whole number of days');
-    if (n > 60) return setDaysError('Extend by 60 days at most');
-    setConfirmExtend({ booking: extendFor, days: n });
-    setExtendFor(null);
-  };
+  const [extendSheet, setExtendSheet] = useState<Booking | null>(null);
+  const openExtend = (b: Booking) => setExtendSheet(b);
 
   return (
     <View>
@@ -185,41 +171,7 @@ export default function OverdueRentalsTab() {
         <Field label="Contacted by" required value={by} onChangeText={setBy} error={errors.by} />
       </FormSheet>
 
-      <FormSheet
-        visible={!!extendFor}
-        title={extendFor ? `Extend ${extendFor.id}` : ''}
-        onClose={() => setExtendFor(null)}
-        footer={
-          <>
-            <Button label="Cancel" variant="outline" onPress={() => setExtendFor(null)} />
-            <Button label="Continue" onPress={reviewExtend} />
-          </>
-        }>
-        <Field
-          label="Extra days"
-          required
-          keyboardType="number-pad"
-          value={extraDays}
-          onChangeText={(t) => {
-            setExtraDays(t);
-            setDaysError(undefined);
-          }}
-          hint="The rental amount is recalculated from the vehicle's rate."
-          error={daysError}
-        />
-      </FormSheet>
-
-      <ConfirmDialog
-        visible={!!confirmExtend}
-        title="Extend this rental?"
-        message={confirmExtend ? `${confirmExtend.booking.id} for ${confirmExtend.booking.customerName} will run ${confirmExtend.days} more day${confirmExtend.days === 1 ? '' : 's'}, and the rental amount will be recalculated.` : undefined}
-        confirmLabel="Extend rental"
-        onConfirm={() => {
-          if (confirmExtend) extendRental(confirmExtend.booking.id, confirmExtend.days);
-          setConfirmExtend(null);
-        }}
-        onCancel={() => setConfirmExtend(null)}
-      />
+      {extendSheet ? <ExtendRentalSheet booking={extendSheet} initialDays={Math.max(1, lateDays(extendSheet))} onClose={() => setExtendSheet(null)} /> : null}
     </View>
   );
 }
