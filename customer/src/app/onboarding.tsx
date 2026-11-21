@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/kit';
 import { KeyGoLogo } from '../components/ui/KeyGoLogo';
+import { DrivingBackground } from '../components/ui/DrivingBackground';
 import { completeOnboarding } from '../services/auth';
 import { useThemeColors } from '../theme';
 
@@ -42,7 +43,12 @@ export default function OnboardingScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.nav }}>
       {/* The picture covers the whole screen, edge to edge; the padding is only on the content on top of it */}
-      <Image source={slide.image} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />
+      {index === 0 ? (
+        // First slide: the car picture with a gentle driving animation
+        <DrivingBackground source={slide.image} />
+      ) : (
+        <Image source={slide.image} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />
+      )}
       <View style={{ flex: 1, paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24, paddingHorizontal: 24 }}>
         <KeyGoLogo size={34} showText />
         {/* The picture fills the top; the words sit lower, on the calm dark part above the buttons */}
