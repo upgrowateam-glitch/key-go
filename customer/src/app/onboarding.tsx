@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../components/kit';
 import { KeyGoLogo } from '../components/ui/KeyGoLogo';
-import { DrivingBackground } from '../components/ui/DrivingBackground';
+import { VideoBackground } from '../components/ui/VideoBackground';
 import { ClockBackground } from '../components/ui/ClockBackground';
 import { SigningBackground } from '../components/ui/SigningBackground';
 import { completeOnboarding } from '../services/auth';
@@ -47,7 +47,7 @@ export default function OnboardingScreen() {
       {/* The picture covers the whole screen, edge to edge; the padding is only on the content on top of it */}
       {index === 0 ? (
         // First slide: the car picture with a gentle driving animation
-        <DrivingBackground source={slide.image} />
+        <VideoBackground video={require('../../assets/videos/slide1-car.mp4')} still={slide.image} />
       ) : index === 1 ? (
         // Second slide: the calendar picture with a working clock
         <ClockBackground source={slide.image} />
