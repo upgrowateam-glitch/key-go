@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { Button, Field, FormRow } from '../components/kit';
+import { Calendar, Lock, Mail, Phone, User } from 'lucide-react-native';
+import { Button, FormRow } from '../components/kit';
+import { GLASS, GlassField } from '../components/ui/GlassField';
 import { AuthBackdrop } from '../components/ui/AuthBackdrop';
 import { useApp } from '../context/AppContext';
 import { parseISODate } from '../lib/format';
 import { register } from '../services/auth';
-import { useThemeColors } from '../theme';
 
 export default function RegisterScreen() {
-  const colors = useThemeColors();
   const router = useRouter();
   const { showToast } = useApp();
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '', email: '', dob: '', password: '' });
@@ -52,18 +52,75 @@ export default function RegisterScreen() {
       titleInCard>
       <View>
         <FormRow>
-          <Field label="First name" value={form.firstName} onChangeText={set('firstName')} required error={tried ? errors.firstName : undefined} />
-          <Field label="Last name" value={form.lastName} onChangeText={set('lastName')} required error={tried ? errors.lastName : undefined} />
+          <GlassField
+            label="First name"
+            value={form.firstName}
+            onChangeText={set('firstName')}
+            autoComplete="given-name"
+            placeholder="e.g. Arjun"
+            icon={<User size={18} color={GLASS.soft} />}
+            required
+            error={tried ? errors.firstName : undefined}
+          />
+          <GlassField
+            label="Last name"
+            value={form.lastName}
+            onChangeText={set('lastName')}
+            autoComplete="family-name"
+            placeholder="e.g. Menon"
+            icon={<User size={18} color={GLASS.soft} />}
+            required
+            error={tried ? errors.lastName : undefined}
+          />
         </FormRow>
-        <Field label="Phone" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" required error={tried ? errors.phone : undefined} />
-        <Field label="Email" value={form.email} onChangeText={set('email')} keyboardType="email-address" required error={tried ? errors.email : undefined} />
-        <Field label="Date of birth" value={form.dob} onChangeText={set('dob')} placeholder="YYYY-MM-DD" required error={tried ? errors.dob : undefined} />
-        <Field label="Password" secureTextEntry value={form.password} onChangeText={set('password')} required error={tried ? errors.password : undefined} />
-        {error ? <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 10 }}>{error}</Text> : null}
-        <Button label={busy ? 'Creating account…' : 'Create account'} fullWidth size="lg" disabled={busy} onPress={submit} />
-        <Text style={{ color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: 14 }}>
+        <GlassField
+          label="Phone"
+          value={form.phone}
+          onChangeText={set('phone')}
+          keyboardType="phone-pad"
+          autoComplete="tel"
+          placeholder="98765 43210"
+          icon={<Phone size={18} color={GLASS.soft} />}
+          required
+          error={tried ? errors.phone : undefined}
+        />
+        <GlassField
+          label="Email"
+          value={form.email}
+          onChangeText={set('email')}
+          keyboardType="email-address"
+          autoComplete="email"
+          placeholder="you@example.com"
+          icon={<Mail size={18} color={GLASS.soft} />}
+          required
+          error={tried ? errors.email : undefined}
+        />
+        <GlassField
+          label="Date of birth"
+          value={form.dob}
+          onChangeText={set('dob')}
+          keyboardType="numbers-and-punctuation"
+          placeholder="YYYY-MM-DD"
+          icon={<Calendar size={18} color={GLASS.soft} />}
+          required
+          error={tried ? errors.dob : undefined}
+        />
+        <GlassField
+          label="Password"
+          secureTextEntry
+          autoComplete="new-password"
+          value={form.password}
+          onChangeText={set('password')}
+          placeholder="At least 8 characters"
+          icon={<Lock size={18} color={GLASS.soft} />}
+          required
+          error={tried ? errors.password : undefined}
+        />
+        {error ? <Text style={{ color: GLASS.error, fontSize: 13, marginBottom: 10, fontWeight: '600' }}>{error}</Text> : null}
+        <Button label={busy ? 'Creating account…' : 'Create account'} variant="highlight" fullWidth size="lg" disabled={busy} onPress={submit} />
+        <Text style={{ color: GLASS.soft, fontSize: 13, textAlign: 'center', marginTop: 14 }}>
           Already registered?{' '}
-          <Link href={'/login' as any} replace style={{ color: colors.primaryText, fontWeight: '700' }}>
+          <Link href={'/login' as any} replace style={{ color: GLASS.link, fontWeight: '700' }}>
             Sign in
           </Link>
         </Text>
