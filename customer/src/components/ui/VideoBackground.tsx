@@ -27,23 +27,43 @@ export function VideoBackground({ video, still }: { video: VideoSource; still: I
 
   useEffect(() => {
     if (reduceMotion) return;
-    player.play();
-    const ended = player.addListener('playToEnd', () => {
-      // empty road → back to the start, through the still
-      cover.set(withTiming(1, { duration: FADE_MS }));
-      timers.current.push(
-        setTimeout(() => {
-          player.currentTime = 0;
-          player.play();
-          timers.current.push(setTimeout(() => cover.set(withTiming(0, { duration: FADE_MS })), 350));
-        }, FADE_MS)
-      );
+    // When the slide closes, the player is released (by useVideoPlayer) before this clean-up runs. Touching a
+    // released player throws on Android and closes the app, so after that nothing may call the player.
+    let alive = true;
+    const safely = (task: () => void) => {
+      if (!alive) return;
+      try {
+        task();
+      } catch {
+        // the player is gone; nothing to do
+      }
+    };
+    safely(() => player.play());
+    let ended: { remove: () => void } | null = null;
+    safely(() => {
+      ended = player.addListener('playToEnd', () => {
+        // empty road → back to the start, through the still
+        cover.set(withTiming(1, { duration: FADE_MS }));
+        timers.current.push(
+          setTimeout(() => {
+            safely(() => {
+              player.currentTime = 0;
+              player.play();
+            });
+            timers.current.push(setTimeout(() => alive && cover.set(withTiming(0, { duration: FADE_MS })), 350));
+          }, FADE_MS)
+        );
+      });
     });
     const pending = timers.current;
     return () => {
-      ended.remove();
+      alive = false;
       pending.forEach(clearTimeout);
-      player.pause();
+      try {
+        ended?.remove();
+      } catch {
+        // already released with the player
+      }
     };
   }, [player, reduceMotion, cover]);
 
