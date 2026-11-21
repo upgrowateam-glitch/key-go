@@ -6,6 +6,7 @@ import { Button } from '../components/kit';
 import { KeyGoLogo } from '../components/ui/KeyGoLogo';
 import { DrivingBackground } from '../components/ui/DrivingBackground';
 import { ClockBackground } from '../components/ui/ClockBackground';
+import { SigningBackground } from '../components/ui/SigningBackground';
 import { completeOnboarding } from '../services/auth';
 import { useThemeColors } from '../theme';
 
@@ -50,6 +51,9 @@ export default function OnboardingScreen() {
       ) : index === 1 ? (
         // Second slide: the calendar picture with a working clock
         <ClockBackground source={slide.image} />
+      ) : index === 2 ? (
+        // Third slide: a golden pen signs the agreement
+        <SigningBackground source={slide.image} />
       ) : (
         <Image source={slide.image} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' }} />
       )}
