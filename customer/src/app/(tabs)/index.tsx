@@ -10,8 +10,6 @@ import {
   Smartphone,
   X,
   SearchX,
-  CalendarRange,
-  CreditCard,
   KeyRound,
   LayoutGrid,
   CarFront,
@@ -24,6 +22,7 @@ import { CarCard } from '../../components/ui/CarCard';
 import { FeaturedCarousel } from '../../components/home/FeaturedCarousel';
 import { HomeHero } from '../../components/home/HomeHero';
 import { RentalPlanner } from '../../components/home/RentalPlanner';
+import { HowItWorks } from '../../components/home/HowItWorks';
 import { StatsCard } from '../../components/home/StatsCard';
 import {
   Screen,
@@ -61,12 +60,6 @@ const CATEGORY_ICONS: Record<string, typeof Car> = { All: LayoutGrid, Hatchback:
 const CARD_WIDTH = 296;
 const CARD_GAP = 16;
 const INTERVAL_STEP = CARD_WIDTH + CARD_GAP;
-const STEPS = [
-  { step: '01', title: 'Choose a car', desc: 'Browse verified cars with real photos and specs.', Icon: Search },
-  { step: '02', title: 'Pick your dates', desc: 'Rent for a day, a week or a whole month.', Icon: CalendarRange },
-  { step: '03', title: 'Pay securely', desc: 'UPI, cards or wallets. Deposit returned after the trip.', Icon: CreditCard },
-  { step: '04', title: 'Get the keys', desc: 'Delivered to your door, sanitized and ready to go.', Icon: KeyRound },
-];
 
 export default function HomeScreen() {
   const colors = useThemeColors();
@@ -194,6 +187,9 @@ export default function HomeScreen() {
       </View>
       <View style={{ marginTop: 16 }}>
         <RentalPlanner onSearch={handleBookingSearch} />
+      </View>
+      <View style={{ marginTop: 16 }}>
+        <HowItWorks />
       </View>
 
       {/* --- TOP BRANDS (MARQUEE) --- */}
@@ -356,24 +352,6 @@ export default function HomeScreen() {
             />
           </Card>
         )}
-      </Section>
-
-      {/* --- HOW IT WORKS --- */}
-      <Section title="Keys in hand in 4 easy steps" subtitle="Book in 2 minutes from your phone. We handle the rest.">
-        <Grid cols={cols(1, 2, 4)} gap={12}>
-          {STEPS.map((item) => (
-            <Card key={item.step} style={styles.stepCard}>
-              <View style={styles.stepTop}>
-                <View style={styles.stepIcon}>
-                  <item.Icon size={20} color={colors.primaryText} />
-                </View>
-                <Text style={styles.stepNum}>{item.step}</Text>
-              </View>
-              <Text style={styles.stepTitle}>{item.title}</Text>
-              <Text style={styles.stepDesc}>{item.desc}</Text>
-            </Card>
-          ))}
-        </Grid>
       </Section>
 
       {/* --- WHY KEYGO --- */}
