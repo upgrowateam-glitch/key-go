@@ -43,18 +43,20 @@ export function RentalPlanner({ onSearch }: { onSearch: () => void }) {
 
   return (
     <View style={styles.card}>
-      {/* green header with faint street-map lines */}
+      {/* white header (the original colours): faint street-map lines in the corner, green bar by the title */}
       <View style={styles.head}>
-        <Svg width={190} height={120} viewBox="0 0 170 120" style={styles.map}>
-          <Path d={MAP} stroke={colors.onPrimary} strokeWidth={5} fill="none" opacity={0.12} />
+        <Svg width={170} height={120} viewBox="0 0 170 120" style={styles.map}>
+          <Path d={MAP} stroke={colors.lineStrong} strokeWidth={6} fill="none" opacity={0.35} />
+          <Path d={MAP} stroke={colors.card} strokeWidth={4} fill="none" />
         </Svg>
-        <View style={styles.headIcon}>
-          <MapPin size={18} color={colors.onHighlight} />
-        </View>
-        <View style={{ flex: 1 }}>
+        <View style={styles.titleRow}>
+          <View style={styles.titleBar} />
           <Text style={styles.title} accessibilityRole="header">
             Plan your rental
           </Text>
+        </View>
+        <View style={styles.subRow}>
+          <View style={styles.subBar} />
           <Text style={styles.sub}>Choose the best option for your journey</Text>
         </View>
       </View>
@@ -77,12 +79,12 @@ export function RentalPlanner({ onSearch }: { onSearch: () => void }) {
                   setBookingDraft((prev) => ({ ...prev, term: key === 'Monthly' ? 'Monthly' : 'Daily' }));
                 }}>
                 <View style={[styles.typeIcon, active && styles.typeIconActive]}>
-                  <Icon size={17} color={active ? colors.onPrimary : colors.primaryText} />
+                  <Icon size={17} color={active ? colors.primary : colors.primaryText} />
                 </View>
                 <Text style={[styles.typeText, active && styles.typeTextActive]} numberOfLines={1} adjustsFontSizeToFit>
                   {label}
                 </Text>
-                <Text style={styles.typeHint} numberOfLines={1}>
+                <Text style={[styles.typeHint, active && styles.typeHintActive]} numberOfLines={1}>
                   {hint}
                 </Text>
               </TouchableOpacity>
@@ -142,7 +144,7 @@ export function RentalPlanner({ onSearch }: { onSearch: () => void }) {
           ) : null}
         </View>
 
-        <Button label="Search available cars" variant="highlight" size="lg" fullWidth onPress={onSearch} icon={(c) => <Search size={17} color={c} />} />
+        <Button label="Search available cars" size="lg" fullWidth onPress={onSearch} icon={(c) => <Search size={17} color={c} />} />
       </View>
 
       <FormSheet
@@ -178,11 +180,14 @@ const makeStyles = (colors: ThemeColors) =>
       ...boxShadow(colors.shadow, { y: 8, blur: 18, opacity: 0.1 }),
       elevation: 3,
     },
-    head: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.primary, paddingHorizontal: 18, paddingTop: 18, paddingBottom: 20 },
-    map: { position: 'absolute', top: -10, right: -20, pointerEvents: 'none' },
-    headIcon: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.highlight },
-    title: { color: colors.onPrimary, fontSize: 21, lineHeight: 26, fontWeight: '800', letterSpacing: -0.4 },
-    sub: { color: withAlpha(colors.onPrimary, 0.78), fontSize: 13, lineHeight: 18, marginTop: 2 },
+    head: { paddingHorizontal: 18, paddingTop: 18 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    titleBar: { width: 4, height: 24, borderRadius: 2, backgroundColor: colors.primary },
+    subRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    subBar: { width: 3, height: 14, borderRadius: 2, backgroundColor: colors.secondaryBorder },
+    map: { position: 'absolute', top: 0, right: 0, pointerEvents: 'none' },
+    title: { color: colors.txt, fontSize: 22, lineHeight: 28, fontWeight: '800', letterSpacing: -0.4 },
+    sub: { color: colors.txt, fontSize: 13, lineHeight: 18 },
     body: { padding: 16, paddingTop: 16, gap: 14 },
     types: { flexDirection: 'row', gap: 8 },
     type: {
@@ -196,12 +201,13 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.line,
       backgroundColor: colors.card,
     },
-    typeActive: { borderColor: colors.primary, backgroundColor: colors.primarySoft },
+    typeActive: { borderColor: colors.primary, backgroundColor: colors.primary },
     typeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg2, marginBottom: 7 },
-    typeIconActive: { backgroundColor: colors.primary },
+    typeIconActive: { backgroundColor: colors.onPrimary },
     typeText: { color: colors.txt, fontSize: 13, lineHeight: 17, fontWeight: '700' },
-    typeTextActive: { color: colors.primaryText, fontWeight: '800' },
+    typeTextActive: { color: colors.onPrimary, fontWeight: '800' },
     typeHint: { color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 1 },
+    typeHintActive: { color: withAlpha(colors.onPrimary, 0.8) },
     trip: { backgroundColor: colors.bg, borderRadius: 18, borderWidth: 1, borderColor: colors.line, padding: 10, gap: 10 },
     location: {
       flexDirection: 'row',

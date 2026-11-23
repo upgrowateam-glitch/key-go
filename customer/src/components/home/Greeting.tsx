@@ -26,14 +26,11 @@ export function Greeting({ text, part, name }: { text: string; part: Part; name:
     <Animated.View style={[styles.row, fade]} accessible accessibilityRole="header" accessibilityLabel={name ? `${text}, ${name}` : text}>
       {part === 'evening' ? <Moon /> : <Sun strong={part === 'afternoon'} />}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text style={[styles.hello, { color: TONE[part] }]} numberOfLines={1}>
-          {name ? `${text},` : text}
+        {/* one line: "Good morning," in the time-of-day colour, then the name in bold; shrinks a little if long */}
+        <Text style={styles.line} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          <Text style={[styles.hello, { color: TONE[part] }]}>{name ? `${text}, ` : text}</Text>
+          {name ? <Text style={styles.name}>{name}</Text> : null}
         </Text>
-        {name ? (
-          <Text style={styles.name} numberOfLines={1}>
-            {name}
-          </Text>
-        ) : null}
       </View>
     </Animated.View>
   );
@@ -179,6 +176,7 @@ function Star({ x, y, r, delay, twinkle, still }: { x: number; y: number; r: num
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, minHeight: 56 },
-    hello: { fontSize: 15, lineHeight: 20, fontWeight: '700', letterSpacing: 0.3, includeFontPadding: false },
-    name: { color: colors.txt, fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.6, marginTop: 1, includeFontPadding: false },
+    line: { fontSize: 22, lineHeight: 28, includeFontPadding: false },
+    hello: { fontSize: 22, fontWeight: '700', letterSpacing: -0.2 },
+    name: { color: colors.txt, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
   });
