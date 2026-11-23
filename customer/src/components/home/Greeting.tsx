@@ -1,16 +1,7 @@
 import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
-import Animated, {
-  Easing,
-  FadeInDown,
-  cancelAnimation,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { Easing, cancelAnimation, useAnimatedStyle, useReducedMotion, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
 import { useThemedStyles, type ThemeColors } from '../../theme';
 
 type Part = 'morning' | 'afternoon' | 'evening';
@@ -21,17 +12,18 @@ const TONE: Record<Part, string> = { morning: '#E0A100', afternoon: '#E8740C', e
 
 /**
  * The home greeting: a living sky icon (a glowing sun in the morning and afternoon, a crescent moon with twinkling
- * stars in the evening), then "Good morning," and the customer's name large below it. Slides in when the home opens.
+ * stars in the evening), then "Good morning," and the customer's name large below it. Fades in when the home opens
+ * (in place: a sliding entrance left the row shifted down on some Android phones, overlapping the badge below).
  */
 export function Greeting({ text, part, name }: { text: string; part: Part; name: string }) {
   const styles = useThemedStyles(makeStyles);
+  const shown = useSharedValue(0);
+  useEffect(() => {
+    shown.value = withTiming(1, { duration: 500 });
+  }, [shown]);
+  const fade = useAnimatedStyle(() => ({ opacity: shown.value }));
   return (
-    <Animated.View
-      entering={FadeInDown.duration(500)}
-      style={styles.row}
-      accessible
-      accessibilityRole="header"
-      accessibilityLabel={name ? `${text}, ${name}` : text}>
+    <Animated.View style={[styles.row, fade]} accessible accessibilityRole="header" accessibilityLabel={name ? `${text}, ${name}` : text}>
       {part === 'evening' ? <Moon /> : <Sun strong={part === 'afternoon'} />}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={[styles.hello, { color: TONE[part] }]} numberOfLines={1}>
@@ -186,7 +178,7 @@ function Star({ x, y, r, delay, twinkle, still }: { x: number; y: number; r: num
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-    hello: { fontSize: 15, fontWeight: '700', letterSpacing: 0.3 },
-    name: { color: colors.txt, fontSize: 28, fontWeight: '800', letterSpacing: -0.6, marginTop: 1 },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16, minHeight: 56 },
+    hello: { fontSize: 15, lineHeight: 20, fontWeight: '700', letterSpacing: 0.3, includeFontPadding: false },
+    name: { color: colors.txt, fontSize: 28, lineHeight: 34, fontWeight: '800', letterSpacing: -0.6, marginTop: 1, includeFontPadding: false },
   });
