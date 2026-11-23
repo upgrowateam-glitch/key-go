@@ -15,7 +15,15 @@ const FADE_MS = 700;
  * - A dark fade at the bottom keeps the slide's text and buttons readable.
  * - With reduced motion the still is shown and the video does not play.
  */
-export function VideoBackground({ video, still }: { video: VideoSource; still: ImageSourcePropType }) {
+export function VideoBackground({
+  video,
+  still,
+  fade = true,
+}: {
+  video: VideoSource;
+  still: ImageSourcePropType;
+  /** the dark fade for slide text; off when the screen draws its own */ fade?: boolean;
+}) {
   const reduceMotion = useReducedMotion();
   const cover = useSharedValue(1);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
@@ -86,18 +94,20 @@ export function VideoBackground({ video, still }: { video: VideoSource; still: I
         <Image source={still} resizeMode="cover" style={[FILL, { width: '100%', height: '100%' }]} />
       </Animated.View>
       {/* dark fade behind the title and buttons */}
-      <Svg style={FILL} width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id="slideFade" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#072A20" stopOpacity="0" />
-            <Stop offset="0.55" stopColor="#072A20" stopOpacity="0" />
-            <Stop offset="0.72" stopColor="#072A20" stopOpacity="0.7" />
-            <Stop offset="0.86" stopColor="#072A20" stopOpacity="0.9" />
-            <Stop offset="1" stopColor="#072A20" stopOpacity="0.96" />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100" height="100" fill="url(#slideFade)" />
-      </Svg>
+      {fade ? (
+        <Svg style={FILL} width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <Defs>
+            <LinearGradient id="slideFade" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#072A20" stopOpacity="0" />
+              <Stop offset="0.55" stopColor="#072A20" stopOpacity="0" />
+              <Stop offset="0.72" stopColor="#072A20" stopOpacity="0.7" />
+              <Stop offset="0.86" stopColor="#072A20" stopOpacity="0.9" />
+              <Stop offset="1" stopColor="#072A20" stopOpacity="0.96" />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100" height="100" fill="url(#slideFade)" />
+        </Svg>
+      ) : null}
     </View>
   );
 }

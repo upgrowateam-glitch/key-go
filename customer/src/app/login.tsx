@@ -39,6 +39,7 @@ export default function LoginScreen() {
   return (
     <AuthBackdrop
       image={require('../../assets/images/onboarding-1.jpg')}
+      video={require('../../assets/videos/slide1-car.mp4')}
       title="Welcome back"
       subtitle="Sign in to book a car, sign your agreement and follow your trip.">
       <View>

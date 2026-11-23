@@ -3,7 +3,9 @@ import { Image, Text, View, type ImageSourcePropType, type LayoutChangeEvent } f
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import Animated, { useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import type { VideoSource } from 'expo-video';
 import { KeyGoLogo } from './KeyGoLogo';
+import { VideoBackground } from './VideoBackground';
 import { GLASS } from './GlassField';
 
 const FILL = { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0 };
@@ -20,6 +22,7 @@ const BLUR = 22;
  */
 export function AuthBackdrop({
   image,
+  video,
   title,
   subtitle,
   maxWidth = 480,
@@ -27,6 +30,8 @@ export function AuthBackdrop({
   children,
 }: {
   image: ImageSourcePropType;
+  /** Optional silent looping video behind the screen; image is its first frame (shown while it loads). */
+  video?: VideoSource;
   title: string;
   subtitle: string;
   maxWidth?: number;
@@ -53,7 +58,11 @@ export function AuthBackdrop({
     <View
       style={{ flex: 1, backgroundColor: '#072A20' }}
       onLayout={(e: LayoutChangeEvent) => setScreen({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-      <Image source={image} resizeMode="cover" style={[FILL, { width: '100%', height: '100%' }]} />
+      {video ? (
+        <VideoBackground video={video} still={image} fade={false} />
+      ) : (
+        <Image source={image} resizeMode="cover" style={[FILL, { width: '100%', height: '100%' }]} />
+      )}
       <Svg style={FILL} width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" pointerEvents="none">
         <Defs>
           <LinearGradient id="authFade" x1="0" y1="0" x2="0" y2="1">
@@ -76,8 +85,9 @@ export function AuthBackdrop({
           style={{ width: '100%', maxWidth, alignSelf: 'center', flexGrow: 1 }}
           onLayout={(e: LayoutChangeEvent) => setColumn({ w: e.nativeEvent.layout.width })}>
           <KeyGoLogo size={36} showText />
-          {/* pushes the welcome text and the form towards the bottom, over the darker part of the picture */}
-          <View style={{ flexGrow: 1, minHeight: 120 }} />
+          {/* sign-in: pushes the welcome text and the form towards the bottom, over the darker part of the picture;
+              sign-up (title in the card): the long form sits in the middle, with equal space above and below */}
+          <View style={{ flexGrow: 1, minHeight: titleInCard ? 20 : 120 }} />
           {titleInCard ? null : (
             <>
               <Text style={{ color: GLASS.text, fontSize: 30, fontWeight: '800', letterSpacing: -0.6 }}>{title}</Text>
@@ -121,6 +131,7 @@ export function AuthBackdrop({
               {children}
             </View>
           </View>
+          {titleInCard ? <View style={{ flexGrow: 1, minHeight: 20 }} /> : null}
         </View>
       </Animated.ScrollView>
     </View>
