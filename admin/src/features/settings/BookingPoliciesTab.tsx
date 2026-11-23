@@ -3,7 +3,8 @@ import { Text, View } from 'react-native';
 import { Card, ChipGroup, Field, FormRow, Section, SimulatedNote, ToggleRow } from '../../components/kit';
 import { useApp } from '../../context/AppContext';
 import { useThemedStyles } from '../../theme';
-import { policiesStore, type BookingPolicies } from '../../services/settings';
+import { bookingRulesStore, DEFAULT_BOOKING_RULES, policiesStore, type BookingPolicies, type BookingRulesSetting } from '../../services/settings';
+import { SelectField } from '../../components/portal/SelectField';
 import { WithStore } from '../notifications/listControls';
 import { FormActions, isWholeNumber, makeSettingsStyles } from './formParts';
 
@@ -11,7 +12,81 @@ const FUEL_POLICIES = ['Same to same', 'Full to full', 'Prepaid'] as const;
 type NumberKey = 'minDriverAge' | 'minAdvanceHours' | 'freeCancelHours' | 'cancellationFeePercent' | 'lateGraceMinutes' | 'lateFeePerHour' | 'kmLimitPerDay' | 'extraKmCharge';
 
 export default function BookingPoliciesTab() {
-  return <WithStore store={policiesStore}>{(policies, save) => <PoliciesForm policies={policies} save={save} />}</WithStore>;
+  return (
+    <View>
+      <WithStore store={bookingRulesStore}>{(rules, save) => <BookingRulesForm rules={rules} save={save} />}</WithStore>
+      <WithStore store={policiesStore}>{(policies, save) => <PoliciesForm policies={policies} save={save} />}</WithStore>
+    </View>
+  );
+}
+
+const VALIDITY = ['12 hours', '24 hours', '48 hours', '72 hours', '7 days'] as const;
+const VALIDITY_HOURS: Record<(typeof VALIDITY)[number], number> = { '12 hours': 12, '24 hours': 24, '48 hours': 48, '72 hours': 72, '7 days': 168 };
+const DAYS_BEFORE = ['1 day', '2 days', '3 days', '5 days', '7 days'] as const;
+/** Reminder times offered, 6 AM to 9 PM on the hour and half hour (saved as 24-hour "HH:MM"). */
+const REMINDER_TIMES = Array.from({ length: 31 }, (_, i) => {
+  const h = 6 + Math.floor(i / 2);
+  const m = i % 2 ? '30' : '00';
+  return { value: `${String(h).padStart(2, '0')}:${m}`, label: `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}` };
+});
+
+/** Quotation validity and the automatic pickup reminder (the server applies these). */
+function BookingRulesForm({ rules, save }: { rules: BookingRulesSetting; save: (r: BookingRulesSetting) => void }) {
+  const { showToast } = useApp();
+  const start = { ...DEFAULT_BOOKING_RULES, ...rules, reminder: { ...DEFAULT_BOOKING_RULES.reminder, ...(rules?.reminder ?? {}) } };
+  const [form, setForm] = useState<BookingRulesSetting>(start);
+  const dirty = JSON.stringify(form) !== JSON.stringify(start);
+  const validity = (Object.keys(VALIDITY_HOURS) as (typeof VALIDITY)[number][]).find((k) => VALIDITY_HOURS[k] === form.quoteValidHours) ?? '48 hours';
+  const before = (DAYS_BEFORE.find((d) => parseInt(d, 10) === form.reminder.daysBefore) ?? '2 days') as (typeof DAYS_BEFORE)[number];
+  const timeLabel = REMINDER_TIMES.find((t) => t.value === form.reminder.time)?.label ?? '9:00 AM';
+  const setReminder = (p: Partial<BookingRulesSetting['reminder']>) => setForm((f) => ({ ...f, reminder: { ...f.reminder, ...p } }));
+  return (
+    <Section title="Quotations and pickup reminder" subtitle="Used by the server for every booking">
+      <Card>
+        <SelectField
+          label="A quotation can be confirmed for"
+          value={validity}
+          options={VALIDITY}
+          onChange={(v) => setForm((f) => ({ ...f, quoteValidHours: VALIDITY_HOURS[v] }))}
+          hint="After that it shows as Expired; staff can renew it."
+        />
+        <ToggleRow
+          label="Pickup reminder"
+          description="Sent to the customer before pickup: in the app, and by WhatsApp below"
+          value={form.reminder.enabled}
+          onValueChange={(enabled) => setReminder({ enabled })}
+        />
+        {form.reminder.enabled ? (
+          <>
+            <FormRow>
+              <SelectField label="Send it" value={before} options={DAYS_BEFORE} onChange={(v) => setReminder({ daysBefore: parseInt(v, 10) })} hint="Before the pickup day" />
+              <SelectField
+                label="At"
+                value={timeLabel}
+                options={REMINDER_TIMES.map((t) => t.label)}
+                onChange={(label) => setReminder({ time: REMINDER_TIMES.find((t) => t.label === label)?.value ?? '09:00' })}
+                hint="India time"
+              />
+            </FormRow>
+            <ToggleRow
+              label="Also send by WhatsApp"
+              description="From KeyGo's linked number (System → WhatsApp & SMS)"
+              value={form.reminder.whatsapp}
+              onValueChange={(whatsapp) => setReminder({ whatsapp })}
+            />
+          </>
+        ) : null}
+        <FormActions
+          dirty={dirty}
+          onSave={() => {
+            save(form);
+            showToast('Quotation and reminder settings saved');
+          }}
+          onReset={() => setForm(start)}
+        />
+      </Card>
+    </Section>
+  );
 }
 
 function PoliciesForm({ policies, save }: { policies: BookingPolicies; save: (p: BookingPolicies) => void }) {

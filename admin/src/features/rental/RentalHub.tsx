@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from '@/shims/expo-router';
-import { Bell, CheckCircle2, ClipboardCheck, FileSignature, KeyRound, Receipt, XCircle } from 'lucide-react-native';
+import { Bell, CheckCircle2, ClipboardCheck, FileSignature, KeyRound, Printer, Receipt, RefreshCw, XCircle } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import {
@@ -43,7 +43,8 @@ export default function RentalHubScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const bookingId = decodeURIComponent(id ?? '');
-  const { bookings, vehicles, inspections, agreements, fastagLogs, confirmBooking, cancelBooking, completeRental, role, today } = useApp();
+  const { bookings, vehicles, inspections, agreements, fastagLogs, confirmBooking, cancelBooking, completeRental, renewQuote, sendReminder, role, today } = useApp();
+  const [reminding, setReminding] = useState(false);
   const { cols } = useResponsive();
   const { session } = useStaffSession();
   const canEditBookings = canAccess(session, 'bookings', 'edit');
@@ -91,6 +92,7 @@ export default function RentalHubScreen() {
   const enc = encodeURIComponent(booking.id);
   const overdue = isOverdue(booking, today);
   const reminder = reminderState(booking, today);
+  const quoteExpired = (booking.status === 'Quoted' || booking.status === 'Pending') && !!booking.quoteValidUntil && Date.parse(booking.quoteValidUntil) < Date.now();
   const fuelDrop = pickup && ret ? Math.max(0, pickup.fuelPercent - ret.fuelPercent) : 0;
   const isOps = role === 'operations';
 
@@ -109,9 +111,21 @@ export default function RentalHubScreen() {
             <Text style={styles.cardTitle}>Quote ready for confirmation</Text>
             <Text style={styles.cardSub}>Review the quote with the customer, then confirm to reserve the vehicle and schedule the pickup reminder.</Text>
             <QuoteLines booking={booking} />
+            {booking.quoteValidUntil ? (
+              <Text style={[styles.cardSub, { marginTop: 8 }, quoteExpired && { color: colors.danger, fontWeight: '700' }]}>
+                {quoteExpired ? 'This quotation has expired' : 'Valid until'}{' '}
+                {new Date(booking.quoteValidUntil).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                {quoteExpired ? ' — renew it to confirm.' : ''}
+              </Text>
+            ) : null}
             {conflicts.length ? <Text style={{ color: colors.danger, fontSize: 13, marginTop: 10 }}>{`${booking.vehicleName} is already held by ${conflicts[0].id} from ${formatDate(conflicts[0].pickupDate, false)} to ${formatDate(conflicts[0].returnDate, false)}. Change the dates or vehicle before confirming.`}</Text> : null}
             <View style={styles.actionsRow}>
-              <Button label="Confirm booking" disabled={conflicts.length > 0} icon={(c) => <CheckCircle2 size={16} color={c} />} onPress={() => setPendingAction('confirm')} />
+              {quoteExpired ? (
+                <Button label="Renew quotation" icon={(c) => <RefreshCw size={16} color={c} />} onPress={() => renewQuote(booking.id)} />
+              ) : (
+                <Button label="Confirm booking" disabled={conflicts.length > 0} icon={(c) => <CheckCircle2 size={16} color={c} />} onPress={() => setPendingAction('confirm')} />
+              )}
+              <Button label="Quotation" variant="outline" icon={(c) => <Printer size={16} color={c} />} onPress={() => router.push(`/bookings/${enc}/quotation` as any)} />
               <Button label="Cancel quote" variant="danger" onPress={() => setPendingAction('cancel')} />
             </View>
           </Card>
@@ -319,14 +333,30 @@ export default function RentalHubScreen() {
               <QuoteLines booking={booking} />
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
                 <Bell size={14} color={reminder === 'none' ? colors.muted : colors.warmText} />
-                <Text style={styles.cardSub}>
+                <Text style={[styles.cardSub, { flex: 1 }]}>
                   {reminder === 'sent'
-                    ? 'Pickup reminder sent'
+                    ? `Pickup reminder sent${booking.reminderLog ? ` ${new Date(booking.reminderLog.sentAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })} · ${booking.reminderLog.channels.length ? booking.reminderLog.channels.map((c) => (c === 'app' ? 'app' : 'WhatsApp')).join(' + ') : 'not delivered'}` : ''}`
                     : reminder === 'scheduled'
-                      ? `Pickup reminder scheduled for ${formatDate(booking.reminderScheduledFor!, false)} (2 days before)`
-                      : 'No pickup reminder scheduled'}
+                      ? `Pickup reminder scheduled for ${formatDate(booking.reminderScheduledFor!, false)}`
+                      : booking.status === 'Confirmed'
+                        ? 'Pickup reminder due — sent automatically within a few minutes'
+                        : 'No pickup reminder scheduled'}
                 </Text>
+                {booking.status === 'Confirmed' && isOps ? (
+                  <Button
+                    label={reminding ? 'Sending…' : reminder === 'sent' ? 'Send again' : 'Send now'}
+                    variant="outline"
+                    size="sm"
+                    disabled={reminding}
+                    onPress={async () => {
+                      setReminding(true);
+                      await sendReminder(booking.id);
+                      setReminding(false);
+                    }}
+                  />
+                ) : null}
               </View>
+              {booking.reminderLog?.whatsappError ? <Text style={[styles.cardSub, { color: colors.warmText, marginTop: 4 }]}>WhatsApp: {booking.reminderLog.whatsappError}</Text> : null}
               {isOps && booking.customerId ? (
                 <Button label="Open customer profile" variant="ghost" size="sm" onPress={() => router.push(`/customers/${booking.customerId}` as any)} style={{ marginTop: 8 }} />
               ) : null}

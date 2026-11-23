@@ -51,7 +51,7 @@ export default function BookingFlowScreen() {
   const insets = useSafeAreaInsets();
   const { isPhone } = useResponsive();
   const params = useLocalSearchParams<{ vehicleId?: string }>();
-  const { vehicles, bookings, customers, currentCustomerId, bookingDraft, setBookingDraft, createQuote, confirmBooking, showToast } = useApp();
+  const { vehicles, bookings, customers, currentCustomerId, bookingDraft, setBookingDraft, createQuote, confirmBooking, showToast, resolveBookingId } = useApp();
 
   const bookable = vehicles.filter((v) => v.status === 'Available');
   const [vehicleId, setVehicleId] = useState(params.vehicleId ?? bookable[0]?.id ?? vehicles[0].id);
@@ -145,7 +145,7 @@ export default function BookingFlowScreen() {
 
           <Card style={{ marginTop: 20 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.cardTitle}>{booking.id}</Text>
+              <Text style={styles.cardTitle}>{resolveBookingId(booking.id)}</Text>
               <Badge label="Confirmed" tone="success" />
             </View>
             <Text style={styles.muted}>
@@ -168,7 +168,7 @@ export default function BookingFlowScreen() {
             <Card>
               <Text style={styles.muted}>Sign your rental agreement now to speed up the handover.</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 }}>
-                <Button label="Review & sign agreement" onPress={() => router.replace(`/rental/${encodeURIComponent(booking.id)}/agreement` as any)} />
+                <Button label="Review & sign agreement" onPress={() => router.replace(`/rental/${encodeURIComponent(resolveBookingId(booking.id))}/agreement` as any)} />
                 <Button label="Go to My Bookings" variant="outline" onPress={() => router.replace('/(tabs)/bookings' as any)} />
               </View>
             </Card>
@@ -289,7 +289,7 @@ export default function BookingFlowScreen() {
                       <ShieldCheck size={16} color={colors.primaryText} />
                       <Text style={[styles.muted, { flex: 1 }]}>Refundable security deposit {formatINR(quote.deposit)} — returned within 48 hours of drop-off.</Text>
                     </View>
-                    {booking ? <Badge label={`Quote ${booking.id} saved`} tone="info" /> : null}
+                    {booking ? <Badge label={resolveBookingId(booking.id) !== booking.id ? `Quote ${resolveBookingId(booking.id)} saved` : "Saving quote…"} tone="info" /> : null}
                   </Card>
                 </Section>
               )}

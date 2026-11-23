@@ -112,9 +112,14 @@ interface AppContextType {
   bookingDraft: BookingDraft;
   setBookingDraft: React.Dispatch<React.SetStateAction<BookingDraft>>;
   /** Legacy one-step booking (kept for compatibility). Prefer createQuote + confirmBooking. */
-  createBooking: (vehicle: Vehicle) => Booking;
-  createQuote: (input: QuoteInput) => Booking;
-  confirmBooking: (bookingId: string) => void;
+  createBooking: (vehicle: Vehicle) => Promise<Booking | null>;
+  /** Creates a quotation on the server, which gives the booking ID (KG + yymmdd + count of the day). Null if refused. */
+  createQuote: (input: QuoteInput) => Promise<Booking | null>;
+  /** Confirms a quotation on the server (date/time clash check, expiry). Null if refused (the reason is shown). */
+  confirmBooking: (bookingId: string) => Promise<Booking | null>;
+  renewQuote: (bookingId: string) => Promise<Booking | null>;
+  sendQuote: (bookingId: string) => Promise<Booking | null>;
+  sendReminder: (bookingId: string) => Promise<Booking | null>;
   cancelBooking: (bookingId: string) => void;
   signAgreement: (bookingId: string, input: SignAgreementInput) => Agreement;
   recordInspection: (bookingId: string, type: InspectionRecord['type'], input: InspectionInput) => InspectionRecord;
@@ -333,15 +338,33 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
   };
 
   // ---------- Booking lifecycle ----------
-  const newBookingId = () => newId('KG');
+  /** Puts the server's copy of a booking on screen (not saved again). */
+  const takeServerBooking = (saved: Booking) => {
+    const exists = bookingsRef.current.some((b) => b.id === saved.id);
+    const next = exists ? bookingsRef.current.map((b) => (b.id === saved.id ? { ...b, ...saved } : b)) : [saved, ...bookingsRef.current];
+    bookingsRef.current = next;
+    setBookingsLocal(next);
+  };
 
-  const createQuote = (input: QuoteInput): Booking => {
+  /** A booking action on the server (confirm, renew, send…); shows the server's reason when it refuses. */
+  const bookingAction = async (bookingId: string, path: string, done: (b: Booking) => string): Promise<Booking | null> => {
+    try {
+      const saved = await api<Booking>(`/admin/bookings/${enc(bookingId)}/${path}`, { method: 'POST' });
+      takeServerBooking(saved);
+      showToast(done(saved));
+      return saved;
+    } catch (e) {
+      showToast((e as Error).message);
+      return null;
+    }
+  };
+
+  const createQuote = async (input: QuoteInput): Promise<Booking | null> => {
     const vehicle = vehicles.find((v) => v.id === input.vehicleId) ?? vehicles[0];
     const customer = customers.find((c) => c.id === input.customerId);
     const days = Math.max(1, daysBetween(input.pickupDate, input.returnDate) || 1);
     const q = computeQuote(vehicle, days, input.term, input.discount ?? 0);
-    const booking: Booking = {
-      id: newBookingId(),
+    const booking: Omit<Booking, 'id'> = {
       customerId: customer?.id,
       customerName: customer?.name ?? input.customerName ?? 'Walk-in customer',
       customerPhone: customer?.phone ?? input.customerPhone ?? '',
@@ -367,34 +390,30 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
       status: 'Quoted',
       paymentStatus: 'Unpaid',
       createdAt: TODAY,
-      reminderScheduledFor: addDays(input.pickupDate, -2),
       reminderSent: false,
       driverId: input.driverId,
     };
-    bookingsRef.current = [booking, ...bookingsRef.current];
-    setBookings((prev) => [booking, ...prev]);
-    showToast(`Quote ${booking.id} generated`);
-    return booking;
+    try {
+      const saved = await api<Booking>('/admin/bookings', { method: 'POST', body: booking });
+      takeServerBooking({ ...booking, ...saved });
+      showToast(`Quotation ${saved.id} created`);
+      return saved;
+    } catch (e) {
+      showToast(`Not saved: ${(e as Error).message}`);
+      return null;
+    }
   };
 
-  const confirmBooking = (bookingId: string) => {
-    const b = bookingsRef.current.find((x) => x.id === bookingId);
-    if (!b) return;
-    setBookings((prev) =>
-      prev.map((x) =>
-        x.id === bookingId
-          ? {
-              ...x,
-              status: 'Confirmed',
-              paymentStatus: x.paymentStatus === 'Unpaid' ? 'Deposit paid' : x.paymentStatus,
-              reminderScheduledFor: addDays(x.pickupDate, -2),
-            }
-          : x
-      )
-    );
-    followBookings(b.vehicleId);
-    showToast(`Booking ${bookingId} confirmed · reminder scheduled`);
+  const confirmBooking = async (bookingId: string) => {
+    const saved = await bookingAction(bookingId, 'confirm', (b) => `Booking ${b.id} confirmed · pickup reminder on ${b.reminderScheduledFor ?? 'its day'}`);
+    if (saved) followBookings(saved.vehicleId);
+    return saved;
   };
+
+  const renewQuote = (bookingId: string) => bookingAction(bookingId, 'renew-quote', (b) => `Quotation ${b.id} renewed`);
+  const sendQuote = (bookingId: string) => bookingAction(bookingId, 'send-quote', (b) => `Quotation ${b.id} sent by WhatsApp`);
+  const sendReminder = (bookingId: string) =>
+    bookingAction(bookingId, 'reminder', (b) => `Pickup reminder sent (${b.reminderLog?.channels?.length ? b.reminderLog.channels.join(' + ') : 'not delivered'})`);
 
   const cancelBooking = (bookingId: string) => {
     const b = bookingsRef.current.find((x) => x.id === bookingId);
@@ -405,8 +424,8 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
     showToast(`Booking ${bookingId} cancelled`);
   };
 
-  const createBooking = (vehicle: Vehicle): Booking => {
-    const quote = createQuote({
+  const createBooking = async (vehicle: Vehicle): Promise<Booking | null> => {
+    const quote = await createQuote({
       vehicleId: vehicle.id,
       pickupLocation: bookingDraft.pickupLocation || 'City Center',
       pickupDate: bookingDraft.pickupDate,
@@ -417,10 +436,8 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
       purpose: bookingDraft.purpose,
       classification: 'Online',
     });
-    const confirmed: Booking = { ...quote, status: 'Confirmed', paymentStatus: 'Deposit paid' };
-    setBookings((prev) => prev.map((b) => (b.id === quote.id ? confirmed : b)));
-    followBookings(vehicle.id);
-    return confirmed;
+    if (!quote) return null;
+    return (await confirmBooking(quote.id)) ?? quote;
   };
 
   const signAgreement = (bookingId: string, input: SignAgreementInput): Agreement => {
@@ -697,6 +714,9 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         setBookingDraft,
         createBooking,
         createQuote,
+        renewQuote,
+        sendQuote,
+        sendReminder,
         confirmBooking,
         cancelBooking,
         signAgreement,

@@ -73,6 +73,8 @@ interface AppContextType {
   bookingDraft: BookingDraft;
   setBookingDraft: React.Dispatch<React.SetStateAction<BookingDraft>>;
   createQuote: (input: QuoteInput) => Booking;
+  /** The server's booking ID for a booking made in this session (quotes show a temporary number until the server answers). */
+  resolveBookingId: (id: string) => string;
   confirmBooking: (bookingId: string) => void;
   cancelBooking: (bookingId: string) => void;
   /** Records a payment (online gateway pending): the deposit confirms a quote, the balance settles a confirmed booking. */
@@ -160,15 +162,19 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
 
   // Server calls for one booking run one after another (a quote must exist before it is confirmed)
   const queues = useRef(new Map<string, Promise<unknown>>());
+  /** Temporary quote number → the booking ID the server gave it. */
+  const serverIds = useRef(new Map<string, string>());
+  const resolveBookingId = (id: string) => serverIds.current.get(id) ?? id;
   const enqueue = <T,>(key: string, task: () => Promise<T>): Promise<T> => {
     const next = (queues.current.get(key) ?? Promise.resolve()).catch(() => undefined).then(task);
     queues.current.set(key, next);
     return next;
   };
 
-  const findBooking = (id: string) => bookingsRef.current.find((b) => b.id === id);
-  const patchBooking = (id: string, patch: Partial<Booking>) => setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
-  const putBooking = (id: string, saved: Booking) => setBookings((prev) => prev.map((b) => (b.id === id ? saved : b)));
+  const findBooking = (id: string) => bookingsRef.current.find((b) => b.id === resolveBookingId(id) || b.id === id);
+  const patchBooking = (id: string, patch: Partial<Booking>) =>
+    setBookings((prev) => prev.map((b) => (b.id === resolveBookingId(id) || b.id === id ? { ...b, ...patch } : b)));
+  const putBooking = (id: string, saved: Booking) => setBookings((prev) => prev.map((b) => (b.id === resolveBookingId(id) || b.id === id ? saved : b)));
   const vehicleStatus = (id: string) => vehiclesRef.current.find((v) => v.id === id)?.status;
   const setVehicleStatus = (id: string, status: Vehicle['status'] | undefined) => {
     if (status) setVehicles((prev) => prev.map((v) => (v.id === id ? { ...v, status } : v)));
@@ -176,7 +182,8 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
 
   /** Sends a booking action; on success the server's booking replaces the local one, on failure `undo` runs. */
   const sendBookingAction = (bookingId: string, path: string, body: unknown, undo: () => void) => {
-    enqueue(bookingId, () => api<Booking>(`/me/bookings/${encodeURIComponent(bookingId)}${path}`, { method: 'POST', body }))
+    // runs after the quote itself was saved (same queue), so the server's ID is known by then
+    enqueue(bookingId, () => api<Booking>(`/me/bookings/${encodeURIComponent(resolveBookingId(bookingId))}${path}`, { method: 'POST', body }))
       .then((saved) => putBooking(bookingId, saved))
       .catch((e: Error) => {
         undo();
@@ -237,12 +244,15 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         },
       })
     )
-      .then((saved) => putBooking(booking.id, saved))
+      .then((saved) => {
+        putBooking(booking.id, saved);
+        serverIds.current.set(booking.id, saved.id);
+      })
       .catch((e: Error) => {
         setBookings((prev) => prev.filter((b) => b.id !== booking.id));
         showToast(e.message);
       });
-    showToast(`Quote ${booking.id} generated`);
+    showToast('Quote generated');
     return booking;
   };
 
@@ -396,6 +406,7 @@ export const AppProvider: React.FC<{ children: ReactNode; seed: Workspace }> = (
         bookingDraft,
         setBookingDraft,
         createQuote,
+        resolveBookingId,
         confirmBooking,
         cancelBooking,
         payBooking,

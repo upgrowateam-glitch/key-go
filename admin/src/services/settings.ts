@@ -119,6 +119,19 @@ export const policiesStore = createStore<BookingPolicies>('settings.policies', {
   allowOutstation: true,
 });
 
+/** Level 5 rules the server applies: how long a quotation can be confirmed, and the pickup reminder. */
+export interface BookingRulesSetting {
+  quoteValidHours: number;
+  reminder: { enabled: boolean; daysBefore: number; time: string; whatsapp: boolean };
+}
+
+export const DEFAULT_BOOKING_RULES: BookingRulesSetting = {
+  quoteValidHours: 48,
+  reminder: { enabled: true, daysBefore: 2, time: '09:00', whatsapp: true },
+};
+
+export const bookingRulesStore = createStore<BookingRulesSetting>('settings.bookingRules', DEFAULT_BOOKING_RULES);
+
 export interface PaymentSettings {
   cash: boolean;
   upi: boolean;

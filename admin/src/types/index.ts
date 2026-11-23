@@ -171,9 +171,16 @@ export interface Booking {
   paymentStatus: PaymentStatus;
   /** Reservation (booking creation) date. */
   createdAt: string;
-  /** Date the pickup reminder is scheduled for (2 days before pickup). */
+  /** Date the pickup reminder is scheduled for (set by the server from Settings → Bookings, 2 days before by default). */
   reminderScheduledFor?: string;
   reminderSent?: boolean;
+  /** When and how the pickup reminder went out (written by the server). */
+  reminderLog?: { sentAt: string; by: string; channels: string[]; whatsappError?: string };
+  /** A quotation can be confirmed until this moment (ISO); renew it after that. */
+  quoteValidUntil?: string;
+  quoteSentAt?: string;
+  quoteSentBy?: string;
+  quoteRenewedAt?: string;
   keylessUnlocked?: boolean;
   driverId?: string;
   /** Extensions of the rental (hours or days), newest last. */

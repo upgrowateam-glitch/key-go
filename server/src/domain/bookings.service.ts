@@ -6,6 +6,19 @@ import { isIsoDate, isoDate, todayIst } from '../common/dates';
 import { pricingRules, SETTING_PRICING, type PricingRules } from './catalog';
 import { codeNumber, normaliseRegistration, vehicleCode } from './vehicle-rules';
 import { bookingFromApi, bookingToApi, currentRate, ratesToApi, vehicleFromApi, vehicleToApi, type Json } from './mappers';
+import { bookingIdPrefix, bookingRules, nextBookingId, quoteValidUntil, reminderDueAt, SETTING_BOOKING_RULES, wallNow, type BookingRules } from './booking-rules';
+
+const obj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : {});
+/** Details only the server writes (the apps send back older copies of a booking, which must not undo them). */
+const SERVER_DETAILS = ['reminderLog', 'quoteValidUntil', 'quoteSentAt', 'quoteSentBy', 'quoteRenewedAt'] as const;
+/** Lock that makes the day's booking numbers be given out one at a time. */
+const BOOKING_ID_LOCK = 51_302_611;
+/** "26 Nov 10:00 AM" */
+const shortWhen = (date: unknown, time: unknown) => {
+  const d = typeof date === 'string' ? new Date(`${date}T00:00:00Z`) : null;
+  const day = d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : String(date);
+  return `${day} ${String(time ?? '').replace(/^0/, '')}`.trim();
+};
 
 /**
  * Booking and vehicle writes shared by the admin and customer APIs.
@@ -81,6 +94,91 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
   async pricing(): Promise<PricingRules> {
     const row = await this.prisma.appSetting.findUnique({ where: { key: SETTING_PRICING } });
     return pricingRules(row?.value);
+  }
+
+  /** The Owner's booking rules (Settings → Bookings): quote validity and the pickup reminder. */
+  async bookingRules(): Promise<BookingRules> {
+    const row = await this.prisma.appSetting.findUnique({ where: { key: SETTING_BOOKING_RULES } });
+    return bookingRules(row?.value);
+  }
+
+  /**
+   * Creates a quotation with the next booking ID of the day (KG26112301, KG26112302, …). The IDs are given out one
+   * at a time under a database lock, so two staff (or a customer and staff) never get the same number.
+   */
+  async createBooking(body: Json) {
+    const rules = await this.bookingRules();
+    const now = new Date();
+    const data = bookingFromApi({ ...body, status: body.status ?? 'Quoted' });
+    if (data.status !== 'QUOTED' && data.status !== 'PENDING') throw new BadRequestException('A new booking starts as a quotation. Confirm it next.');
+    const vehicle = await this.prisma.vehicle.findUnique({ where: { id: data.vehicleId }, select: { status: true } });
+    if (!vehicle) throw new NotFoundException('Vehicle not found.');
+    if (vehicle.status === 'SOLD' || vehicle.status === 'MAINTENANCE') throw new BadRequestException('This car is not available for booking.');
+    const details = { ...obj(data.details), quoteValidUntil: quoteValidUntil(now, rules).toISOString() };
+    const prefix = bookingIdPrefix(now);
+    const saved = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${BOOKING_ID_LOCK}::bigint)::text AS locked`;
+      const used = await tx.booking.findMany({ where: { id: { startsWith: prefix } }, select: { id: true } });
+      const id = nextBookingId(prefix, used.map((u) => u.id));
+      return tx.booking.create({
+        data: { ...data, id, details: details as Prisma.InputJsonValue, reminderAt: reminderDueAt(data.pickupAt as Date, rules), reminderSent: false },
+      });
+    });
+    return bookingToApi(saved);
+  }
+
+  /**
+   * Confirmed or active bookings of a car that overlap the given pickup and return times (date and time). A rental
+   * still out after its return time keeps the car until it comes back.
+   */
+  async findClashes(vehicleId: string, pickupAt: Date, returnAt: Date, exceptBookingId?: string) {
+    const rows = await this.prisma.booking.findMany({
+      where: { vehicleId, ...(exceptBookingId ? { id: { not: exceptBookingId } } : {}), status: { in: ['CONFIRMED', 'ACTIVE'] }, pickupAt: { lt: returnAt } },
+      orderBy: { pickupAt: 'asc' },
+    });
+    const now = wallNow();
+    return rows.filter((b) => {
+      const end = b.status === 'ACTIVE' && b.returnAt < now ? new Date(now.getTime() + 60_000) : b.returnAt;
+      return end > pickupAt;
+    });
+  }
+
+  /** Refuses a booking that would hold a car already booked at those times, naming the booking in the way. */
+  private async checkClashes(id: string, vehicleId: string, pickupAt: Date, returnAt: Date) {
+    const [clash] = await this.findClashes(vehicleId, pickupAt, returnAt, id);
+    if (!clash) return;
+    const c = bookingToApi(clash);
+    throw new ConflictException(
+      `This car is already booked at that time: ${c.id} (${c.customerName}) from ${shortWhen(c.pickupDate, c.pickupTime)} to ${shortWhen(c.returnDate, c.returnTime)}. Choose other dates or times, or another car.`
+    );
+  }
+
+  /** Confirms a quotation (the clash check runs in saveBooking). An expired quotation must be renewed first. */
+  async confirmQuote(id: string) {
+    const b = await this.getBooking(id);
+    if (b.status !== 'QUOTED' && b.status !== 'PENDING') throw new BadRequestException('Only a quotation can be confirmed.');
+    const until = obj(b.details).quoteValidUntil;
+    if (typeof until === 'string' && new Date(until) < new Date()) {
+      const when = new Date(until).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+      throw new BadRequestException(`Quotation ${id} expired on ${when}. Renew it to confirm.`);
+    }
+    return this.patchBooking(id, { status: 'Confirmed', ...(b.paymentStatus === 'UNPAID' ? { paymentStatus: 'Deposit paid' } : {}) });
+  }
+
+  /** Gives a quotation a fresh validity period (same price). */
+  async renewQuote(id: string) {
+    const b = await this.getBooking(id);
+    if (b.status !== 'QUOTED' && b.status !== 'PENDING') throw new BadRequestException('Only a quotation can be renewed.');
+    const rules = await this.bookingRules();
+    const now = new Date();
+    return this.setServerDetails(id, { quoteValidUntil: quoteValidUntil(now, rules).toISOString(), quoteRenewedAt: now.toISOString() });
+  }
+
+  /** Writes details only the server keeps (quote sent, reminder log) without touching the rest of the booking. */
+  async setServerDetails(id: string, patch: Json, extra: Prisma.BookingUpdateInput = {}) {
+    const b = await this.getBooking(id);
+    const saved = await this.prisma.booking.update({ where: { id }, data: { ...extra, details: { ...obj(b.details), ...patch } as Prisma.InputJsonValue } });
+    return bookingToApi(saved);
   }
 
   /** The prices a car is offered at under the given rules. */
@@ -169,7 +267,34 @@ export class BookingsService implements OnModuleInit, OnModuleDestroy {
     const body = await this.keepExtensions(id, bodyIn);
     const data = bookingFromApi(body);
     await this.checkDriver(id, data);
-    const previous = await this.prisma.booking.findUnique({ where: { id }, select: { vehicleId: true } });
+    const previous = await this.prisma.booking.findUnique({
+      where: { id },
+      select: { vehicleId: true, status: true, pickupAt: true, returnAt: true, reminderSent: true, details: true },
+    });
+    const pickupAt = data.pickupAt as Date;
+    const returnAt = data.returnAt as Date;
+    // Date and time clash check before a booking starts holding the car (or moves while holding it)
+    const holds = (st: unknown) => st === 'CONFIRMED' || st === 'ACTIVE';
+    const moved =
+      !previous ||
+      !holds(previous.status) ||
+      previous.vehicleId !== data.vehicleId ||
+      previous.pickupAt.getTime() !== pickupAt.getTime() ||
+      previous.returnAt.getTime() !== returnAt.getTime();
+    if (holds(data.status) && moved) await this.checkClashes(id, data.vehicleId, pickupAt, returnAt);
+    // The reminder belongs to the server: when it is due follows the pickup time, and "sent" resets if pickup moves
+    const rules = await this.bookingRules();
+    const pickupMoved = !previous || previous.pickupAt.getTime() !== pickupAt.getTime();
+    data.reminderAt = reminderDueAt(pickupAt, rules);
+    data.reminderSent = previous && !pickupMoved ? previous.reminderSent : false;
+    const prevDetails = obj(previous?.details);
+    const details = { ...obj(data.details) };
+    for (const k of SERVER_DETAILS) {
+      if (k in prevDetails) details[k] = prevDetails[k];
+      else if (previous) delete details[k];
+    }
+    if (pickupMoved && previous) delete details.reminderLog;
+    data.details = details as Prisma.InputJsonValue;
     try {
       const saved = await this.prisma.booking.upsert({ where: { id }, create: { ...data, id }, update: data });
       // The car (and the previous car, if the booking moved) follows the booking

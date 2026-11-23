@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, ForbiddenException, Get, HttpCod
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import { CurrentUser, CustomerOnly, type AuthPayload } from '../auth/auth.decorators';
-import { addDays, daysBetween, isIsoDate, todayIst } from '../common/dates';
+import { daysBetween, isIsoDate, todayIst } from '../common/dates';
 import { rethrowDbError } from '../common/prisma-errors';
 import { BookingsService } from '../domain/bookings.service';
 import { DEFAULT_LOYALTY_TIERS, DEFAULT_PENALTIES, SETTING_LOYALTY_TIERS, SETTING_PENALTIES } from '../domain/defaults';
@@ -42,7 +42,6 @@ class SignDto {
   @IsString() @MaxLength(120) signedBy: string;
 }
 
-const newBookingId = () => `KG-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 
 /** The signed-in customer's own data. Prices are always worked out here, never trusted from the app. */
 @ApiTags('customer')
@@ -156,8 +155,8 @@ export class MeController {
     const customer = await this.profile(me);
     const days = Math.max(1, daysBetween(body.pickupDate, body.returnDate) || 1);
     const q = computeQuote(rates, days, body.term, 0, rules.taxRate);
-    const id = body.id && !(await this.prisma.booking.count({ where: { id: body.id } })) ? body.id : newBookingId();
-    return this.bookings.saveBooking(id, {
+    // The booking ID comes from the server (KG + yymmdd + count of the day); an ID sent by the app is ignored
+    return this.bookings.createBooking({
       customerId: me.sub,
       customerName: `${customer.firstName} ${customer.lastName}`.trim(),
       customerPhone: customer.phone ?? '',
@@ -183,8 +182,6 @@ export class MeController {
       status: 'Quoted',
       paymentStatus: 'Unpaid',
       createdAt: todayIst(),
-      reminderScheduledFor: addDays(body.pickupDate, -2),
-      reminderSent: false,
     });
   }
 
@@ -194,10 +191,7 @@ export class MeController {
   async confirm(@CurrentUser() me: AuthPayload, @Param('id') id: string) {
     const b = await this.ownBooking(me, id);
     if (b.status !== 'QUOTED' && b.status !== 'PENDING') throw new BadRequestException('Only a quote can be confirmed.');
-    const saved = await this.bookings.patchBooking(id, {
-      status: 'Confirmed',
-      ...(b.paymentStatus === 'UNPAID' ? { paymentStatus: 'Deposit paid' } : {}),
-    });
+    const saved = await this.bookings.confirmQuote(id);
     const vehicle = await this.bookings.vehicleWithRates(b.vehicleId);
     await this.store.notify({ type: 'booking', title: 'New app booking', message: `${b.customerName} confirmed ${vehicle.name} (${id}) for ${saved?.pickupDate}.` });
     await this.store.notify({ type: 'booking', customerId: me.sub, title: 'Booking confirmed', message: `Your ${vehicle.name} (${id}) is confirmed for pickup on ${saved?.pickupDate} at ${saved?.pickupTime}.` });

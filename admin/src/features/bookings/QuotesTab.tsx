@@ -1,8 +1,8 @@
 import { useRouter } from '@/shims/expo-router';
-import { CalendarCheck, FileText, IndianRupee, Plus, Search, Send, TriangleAlert, X } from 'lucide-react-native';
+import { CalendarCheck, Clock3, FileText, IndianRupee, Plus, Printer, RefreshCw, Search, Send, TriangleAlert, X } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
-import { Badge, Button, Card, ChipGroup, Column, ConfirmDialog, DataTable, EmptyState, Field, Grid, SimulatedNote, StatTile, StatusBadge } from '../../components/kit';
+import { Badge, Button, Card, ChipGroup, Column, ConfirmDialog, DataTable, EmptyState, Field, Grid, StatTile, StatusBadge } from '../../components/kit';
 import { useApp } from '../../context/AppContext';
 import { useResponsive } from '../../hooks/useResponsive';
 import { findConflicts } from '../../lib/availability';
@@ -20,12 +20,17 @@ const SORTERS: Record<SortKey, (a: Booking, b: Booking) => number> = {
   Amount: (a, b) => b.totalAmount - a.totalAmount,
 };
 
+/** "Wed 25 Nov, 11:42 am" in India time. */
+const validLabel = (iso: string) =>
+  new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+
 export function QuotesTab() {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const router = useRouter();
   const { cols } = useResponsive();
-  const { bookings, today, messageLog, confirmBooking, cancelBooking, sendTestMessage } = useApp();
+  const { bookings, today, confirmBooking, cancelBooking, renewQuote, sendQuote } = useApp();
+  const [sending, setSending] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('Pickup date');
   const [confirming, setConfirming] = useState<Booking | null>(null);
@@ -34,19 +39,17 @@ export function QuotesTab() {
   const quotes = useMemo(() => bookings.filter((b) => b.status === 'Quoted' || b.status === 'Pending'), [bookings]);
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return quotes.filter((b) => !q || [b.id, b.customerName, b.customerPhone, b.vehicleName, b.vehicleNumber].some((s) => s.toLowerCase().includes(q))).sort(SORTERS[sort]);
+    return quotes.filter((b) => !q || [b.id, b.customerName, b.customerPhone, b.vehicleName, b.vehicleNumber].some((s) => (s ?? '').toLowerCase().includes(q))).sort(SORTERS[sort]);
   }, [quotes, query, sort]);
   const paged = usePaged(filtered);
 
   const clashes = (b: Booking) => findConflicts(bookings, b, { excludeBookingId: b.id, today });
-  const shared = (b: Booking) => messageLog.some((m) => m.preview.includes(`Quote ${b.id}`));
-  const share = (b: Booking) =>
-    sendTestMessage(
-      'booking',
-      'WhatsApp',
-      `${b.customerName} · ${b.customerPhone}`,
-      `KeyGo: Quote ${b.id} for ${b.vehicleName}, ${formatDate(b.pickupDate, false)} to ${formatDate(b.returnDate, false)}: ${formatINR(b.totalAmount)}`
-    );
+  const expired = (b: Booking) => !!b.quoteValidUntil && Date.parse(b.quoteValidUntil) < Date.now();
+  const share = async (b: Booking) => {
+    setSending(b.id);
+    await sendQuote(b.id);
+    setSending(null);
+  };
 
   const columns: Column<Booking>[] = [
     { key: 'id', label: 'Quote', flex: 0.7, minWidth: 90, render: (b) => <Text style={styles.link} accessibilityRole="link" onPress={() => router.push(`/bookings/${encodeURIComponent(b.id)}` as any)}>{b.id}</Text> },
@@ -87,16 +90,42 @@ export function QuotesTab() {
       ),
     },
     { key: 'amount', label: 'Total', flex: 0.7, minWidth: 90, align: 'right', render: (b) => <Text style={styles.cellStrong}>{formatINR(b.totalAmount)}</Text> },
+    {
+      key: 'valid',
+      label: 'Valid until',
+      flex: 0.9,
+      minWidth: 110,
+      render: (b) =>
+        !b.quoteValidUntil ? (
+          <Text style={styles.cellSub}>—</Text>
+        ) : expired(b) ? (
+          <Badge label="Expired" tone="danger" icon={(c) => <Clock3 size={11} color={c} />} />
+        ) : (
+          <Text style={styles.cell}>{validLabel(b.quoteValidUntil)}</Text>
+        ),
+    },
     { key: 'status', label: 'Status', flex: 0.7, minWidth: 90, render: (b) => <StatusBadge status={b.status} /> },
     {
       key: 'actions',
       label: 'Actions',
-      flex: 1.8,
-      minWidth: 280,
+      flex: 2.2,
+      minWidth: 340,
       render: (b) => (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          <Button label="Confirm" size="sm" disabled={clashes(b).length > 0} icon={(c) => <CalendarCheck size={14} color={c} />} onPress={() => setConfirming(b)} />
-          <Button label={shared(b) ? 'Sent' : 'Send'} variant="outline" size="sm" icon={(c) => <Send size={14} color={c} />} onPress={() => share(b)} />
+          {expired(b) ? (
+            <Button label="Renew" size="sm" icon={(c) => <RefreshCw size={14} color={c} />} onPress={() => renewQuote(b.id)} />
+          ) : (
+            <Button label="Confirm" size="sm" disabled={clashes(b).length > 0} icon={(c) => <CalendarCheck size={14} color={c} />} onPress={() => setConfirming(b)} />
+          )}
+          <Button
+            label={sending === b.id ? 'Sending…' : b.quoteSentAt ? 'Sent ✓' : 'WhatsApp'}
+            variant="outline"
+            size="sm"
+            disabled={sending === b.id || expired(b)}
+            icon={(c) => <Send size={14} color={c} />}
+            onPress={() => share(b)}
+          />
+          <Button label="Print" variant="outline" size="sm" icon={(c) => <Printer size={14} color={c} />} onPress={() => router.push(`/bookings/${encodeURIComponent(b.id)}/quotation` as any)} />
           <Button label="Cancel" variant="ghost" size="sm" icon={(c) => <X size={14} color={c} />} onPress={() => setCancelling(b)} />
         </View>
       ),
@@ -108,7 +137,13 @@ export function QuotesTab() {
       <Grid cols={cols(2, 3, 3)} style={{ marginBottom: 4 }}>
         <StatTile label="Open quotes" value={quotes.length} tone="info" icon={(c) => <FileText size={16} color={c} />} />
         <StatTile label="Quoted value" value={formatINRCompact(quotes.reduce((s, b) => s + b.totalAmount, 0))} tone="primary" icon={(c) => <IndianRupee size={16} color={c} />} />
-        <StatTile label="Vehicle clashes" value={quotes.filter((b) => clashes(b).length > 0).length} tone="warning" hint="Cannot be confirmed" icon={(c) => <TriangleAlert size={16} color={c} />} />
+        <StatTile
+          label="Clashes or expired"
+          value={quotes.filter((b) => clashes(b).length > 0 || expired(b)).length}
+          tone="warning"
+          hint="Renew or change before confirming"
+          icon={(c) => <TriangleAlert size={16} color={c} />}
+        />
       </Grid>
       <Card style={{ gap: 12, marginBottom: 12 }}>
         <Field label="Search" value={query} onChangeText={setQuery} placeholder="Quote ID, customer, phone, vehicle or plate" left={<Search size={16} color={colors.muted} />} style={{ marginBottom: 0 }} />
@@ -131,7 +166,7 @@ export function QuotesTab() {
         }
       />
       <ListPager paged={paged} />
-      <SimulatedNote>Sending a quote is simulated and only appears in the delivery log. WhatsApp, SMS and PDF generation are pending integration.</SimulatedNote>
+      <Text style={[styles.cardSub, { marginTop: 8 }]}>WhatsApp sends the quotation from KeyGo's linked number (System → WhatsApp & SMS). Print opens a page you can print or save as PDF.</Text>
 
       <ConfirmDialog
         visible={confirming !== null}
