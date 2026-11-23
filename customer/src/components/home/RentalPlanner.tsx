@@ -79,7 +79,7 @@ export function RentalPlanner({ onSearch }: { onSearch: () => void }) {
                   setBookingDraft((prev) => ({ ...prev, term: key === 'Monthly' ? 'Monthly' : 'Daily' }));
                 }}>
                 <View style={[styles.typeIcon, active && styles.typeIconActive]}>
-                  <Icon size={17} color={active ? colors.primary : colors.primaryText} />
+                  <Icon size={13} color={active ? colors.primary : colors.primaryText} />
                 </View>
                 <Text style={[styles.typeText, active && styles.typeTextActive]} numberOfLines={1} adjustsFontSizeToFit>
                   {label}
@@ -202,7 +202,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.card,
     },
     typeActive: { borderColor: colors.primary, backgroundColor: colors.primary },
-    typeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg2, marginBottom: 7 },
+    typeIcon: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg2, marginBottom: 5 },
     typeIconActive: { backgroundColor: colors.onPrimary },
     typeText: { color: colors.txt, fontSize: 13, lineHeight: 17, fontWeight: '700' },
     typeTextActive: { color: colors.onPrimary, fontWeight: '800' },

@@ -186,10 +186,10 @@ export default function HomeScreen() {
         <FeaturedCarousel width={width - gutter * 2} lowestPrice={lowestPrice} onOpenFleet={() => router.push('/(tabs)/explore' as any)} />
       </View>
       <View style={{ marginTop: 16 }}>
-        <RentalPlanner onSearch={handleBookingSearch} />
+        <HowItWorks />
       </View>
       <View style={{ marginTop: 16 }}>
-        <HowItWorks />
+        <RentalPlanner onSearch={handleBookingSearch} />
       </View>
 
       {/* --- TOP BRANDS (MARQUEE) --- */}

@@ -34,7 +34,6 @@ export function HomeHero({ width, gutter }: { width: number; gutter: number }) {
         <Text style={[styles.title, { fontSize: titleSize, lineHeight: Math.round(titleSize * 1.18) }]} accessibilityRole="header">
           Drive the car{'\n'}you <Text style={styles.accent}>actually</Text> want.
         </Text>
-        <Text style={styles.lead}>Premium rentals delivered to your door in under 60 minutes. No paperwork, no hidden fees.</Text>
       </View>
     </View>
   );
@@ -59,5 +58,4 @@ const makeStyles = (colors: ThemeColors) =>
     badgeText: { color: colors.primary, fontSize: 12.5, fontWeight: '700' },
     title: { color: colors.txt, fontWeight: '800', letterSpacing: -0.8, marginTop: 18 },
     accent: { color: colors.primary },
-    lead: { color: colors.muted, fontSize: 14.5, lineHeight: 21, marginTop: 14 },
   });
