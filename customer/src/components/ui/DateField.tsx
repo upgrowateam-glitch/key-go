@@ -5,6 +5,8 @@ import { Calendar } from 'lucide-react-native';
 import { useThemeColors, withAlpha } from '../../theme';
 import { DateCalendar, MONTHS, textToYmd, type Ymd } from './DateCalendar';
 
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 /**
  * A date field for the app's light pages (pickup and return dates). Looks like the other form fields; tapping it opens
  * the KeyGo calendar (same as the sign-up date of birth) in a card over the page. The value stays "YYYY-MM-DD".
@@ -20,6 +22,7 @@ export function DateField({
   error,
   required,
   style,
+  tile,
 }: {
   label: string;
   value: string;
@@ -32,40 +35,83 @@ export function DateField({
   error?: string;
   required?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Compact tile (small label, big day and month, weekday) used inside the home trip planner. */
+  tile?: boolean;
 }) {
   const colors = useThemeColors();
   const [open, setOpen] = useState(false);
   const selected = textToYmd(value);
 
   return (
-    <View style={[{ marginBottom: 14 }, style]}>
-      <Text style={{ color: colors.txt, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
-        {label}
-        {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${label}${value ? `, ${value}` : ''}`}
-        accessibilityHint="Opens a calendar"
-        onPress={() => setOpen(true)}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          backgroundColor: colors.card,
-          borderWidth: 1,
-          borderColor: error ? colors.danger : open ? colors.primary : colors.lineStrong,
-          borderRadius: 10,
-          paddingHorizontal: 12,
-          minHeight: 44,
-        }}>
-        <Calendar size={16} color={colors.primaryText} />
-        <Text style={{ flex: 1, color: selected ? colors.txt : colors.muted, fontSize: 14, paddingVertical: 10 }} numberOfLines={1}>
-          {selected ? `${selected.d} ${MONTHS[selected.m].slice(0, 3)} ${selected.y}` : value || placeholder}
-        </Text>
-      </Pressable>
-      {error ? <Text style={{ color: colors.danger, fontSize: 11, marginTop: 4, fontWeight: '600' }}>{error}</Text> : null}
-
+    <View style={[tile ? null : { marginBottom: 14 }, style]}>
+      {tile ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label}${value ? `, ${value}` : ''}`}
+          accessibilityHint="Opens a calendar"
+          onPress={() => setOpen(true)}
+          style={{
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 14,
+            backgroundColor: colors.card,
+            borderWidth: 1,
+            borderColor: error ? colors.danger : open ? colors.primary : colors.line,
+          }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+            <Calendar size={13} color={colors.primaryText} />
+            <Text style={{ color: colors.muted, fontSize: 10.5, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' }} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
+          {selected ? (
+            <>
+              <Text style={{ color: colors.txt, fontSize: 20, lineHeight: 25, fontWeight: '800', marginTop: 4, letterSpacing: -0.3 }} numberOfLines={1}>
+                {selected.d} {MONTHS[selected.m].slice(0, 3)}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }} numberOfLines={1}>
+                {WEEKDAY[new Date(selected.y, selected.m, selected.d).getDay()]}, {selected.y}
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ color: colors.muted, fontSize: 16, lineHeight: 25, fontWeight: '700', marginTop: 4 }} numberOfLines={1}>
+                {placeholder}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}> </Text>
+            </>
+          )}
+        </Pressable>
+      ) : (
+        <>
+          <Text style={{ color: colors.txt, fontSize: 12, fontWeight: '700', marginBottom: 6 }}>
+            {label}
+            {required ? <Text style={{ color: colors.danger }}> *</Text> : null}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${label}${value ? `, ${value}` : ''}`}
+            accessibilityHint="Opens a calendar"
+            onPress={() => setOpen(true)}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: colors.card,
+              borderWidth: 1,
+              borderColor: error ? colors.danger : open ? colors.primary : colors.lineStrong,
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              minHeight: 44,
+            }}>
+            <Calendar size={16} color={colors.primaryText} />
+            <Text style={{ flex: 1, color: selected ? colors.txt : colors.muted, fontSize: 14, paddingVertical: 10 }} numberOfLines={1}>
+              {selected ? `${selected.d} ${MONTHS[selected.m].slice(0, 3)} ${selected.y}` : value || placeholder}
+            </Text>
+          </Pressable>
+          {error ? <Text style={{ color: colors.danger, fontSize: 11, marginTop: 4, fontWeight: '600' }}>{error}</Text> : null}
+        </>
+      )}
       <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)} statusBarTranslucent>
         <Animated.View entering={FadeIn.duration(160)} style={{ flex: 1, backgroundColor: withAlpha('#06140E', 0.55), justifyContent: 'center', padding: 16 }}>
           <Pressable
