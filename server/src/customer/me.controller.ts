@@ -114,6 +114,12 @@ export class MeController {
     const before = await this.profile(me);
     const current = customerToApi(before);
     const allowed: Json = Object.fromEntries(Object.entries(body).filter(([k]) => (CUSTOMER_SELF_EDITABLE as readonly string[]).includes(k)));
+    // Nickname (what the app calls them): kept in the profile details, short and trimmed
+    if ('nickname' in allowed) {
+      const nick = typeof allowed.nickname === 'string' ? allowed.nickname.trim().replace(/\s+/g, ' ') : '';
+      if (nick.length > 30) throw new BadRequestException('Nickname can be at most 30 characters.');
+      allowed.nickname = nick;
+    }
     // A new licence number must be a valid Indian licence number
     const rawDl = typeof allowed.dlNumber === 'string' ? allowed.dlNumber.trim() : '';
     if (rawDl && rawDl.replace(/[^A-Z0-9]/gi, '').toUpperCase() !== (before.dlNumber ?? '').replace(/[^A-Z0-9]/gi, '').toUpperCase()) {

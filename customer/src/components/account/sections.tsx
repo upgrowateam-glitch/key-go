@@ -367,6 +367,7 @@ function DetailsBody() {
           items={[
             { label: 'First name', value: orDash(me.firstName) },
             { label: 'Last name', value: orDash(me.lastName) },
+            { label: 'Nickname', value: orDash(me.nickname ?? '') },
             { label: 'Date of birth', value: me.dob ? formatDate(me.dob) : '—' },
             { label: 'Phone', value: orDash(me.phone) },
             { label: 'Email', value: orDash(me.email) },
@@ -398,6 +399,7 @@ function DetailsSheet({ customer, onClose, onSave }: { customer: Customer; onClo
   const [form, setForm] = useState({
     firstName: customer.firstName,
     lastName: customer.lastName,
+    nickname: customer.nickname ?? '',
     dob: customer.dob,
     phone: customer.phone,
     email: customer.email,
@@ -406,6 +408,7 @@ function DetailsSheet({ customer, onClose, onSave }: { customer: Customer; onClo
   });
   const set = (k: keyof typeof form) => (v: string) => setForm((p) => ({ ...p, [k]: v }));
   const nameError = !form.firstName.trim() ? 'First name is required' : undefined;
+  const nickError = form.nickname.trim().length > 30 ? 'At most 30 characters' : undefined;
   const emailError = form.email && !/^\S+@\S+\.\S+$/.test(form.email) ? 'Enter a valid email' : undefined;
   const dobError = form.dob && !/^\d{4}-\d{2}-\d{2}$/.test(form.dob) ? 'Use YYYY-MM-DD' : undefined;
   return (
@@ -416,13 +419,21 @@ function DetailsSheet({ customer, onClose, onSave }: { customer: Customer; onClo
       footer={
         <>
           <Button label="Cancel" variant="ghost" onPress={onClose} />
-          <Button label="Save" disabled={!!nameError || !!emailError || !!dobError} onPress={() => onSave(form)} />
+          <Button label="Save" disabled={!!nameError || !!nickError || !!emailError || !!dobError} onPress={() => onSave(form)} />
         </>
       }>
       <FormRow>
         <Field label="First name" value={form.firstName} onChangeText={set('firstName')} required error={nameError} />
         <Field label="Last name" value={form.lastName} onChangeText={set('lastName')} />
       </FormRow>
+      <Field
+        label="Nickname"
+        value={form.nickname}
+        onChangeText={set('nickname')}
+        placeholder={`What should KeyGo call you? (e.g. ${form.firstName.trim() || 'Arjun'})`}
+        hint="Shown in the app's greeting and at the top instead of your first name. Leave empty to use your first name."
+        error={nickError}
+      />
       <FormRow>
         <Field label="Date of birth" value={form.dob} onChangeText={set('dob')} placeholder="YYYY-MM-DD" error={dobError} />
         <Field label="Phone" value={form.phone} onChangeText={set('phone')} keyboardType="phone-pad" />

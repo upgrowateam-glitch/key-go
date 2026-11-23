@@ -1,19 +1,40 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Sparkles } from 'lucide-react-native';
+import { Moon, Sparkles, Sun, SunMedium } from 'lucide-react-native';
+import { useApp } from '../../context/AppContext';
+import { callName, greetingAt } from '../../lib/names';
 import { KeyGoHeader } from '../ui/KeyGoHeader';
 import { useThemedStyles, useThemeColors, withAlpha, type ThemeColors } from '../../theme';
 
-/** Home header bar with the headline below it on the page background. */
+/** Home header bar, a greeting for the signed-in customer ("Good morning, Arjun"), and the headline below it. */
 export function HomeHero({ width, gutter }: { width: number; gutter: number }) {
   const colors = useThemeColors();
   const styles = useThemedStyles(makeStyles);
   const titleSize = Math.round(Math.min(width * 0.085, 40));
+  const { customers, currentCustomerId } = useApp();
+  const name = callName(customers.find((c) => c.id === currentCustomerId));
+  // the greeting follows the phone's clock (checked every minute, so it changes at noon and 5 pm)
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(t);
+  }, []);
+  const greeting = greetingAt(now);
+  const GreetIcon = greeting.part === 'morning' ? SunMedium : greeting.part === 'afternoon' ? Sun : Moon;
 
   return (
     <View style={styles.wrap}>
       <KeyGoHeader />
       <View style={[styles.copy, { paddingHorizontal: gutter }]}>
+        <View style={styles.greetRow} accessible accessibilityRole="header" accessibilityLabel={name ? `${greeting.text}, ${name}` : greeting.text}>
+          <View style={styles.greetIcon}>
+            <GreetIcon size={18} color={colors.highlight} />
+          </View>
+          <Text style={styles.greet} numberOfLines={1}>
+            {greeting.text}
+            {name ? <Text style={styles.greetName}>, {name}</Text> : null}
+          </Text>
+        </View>
         <View style={styles.badge}>
           <Sparkles size={14} color={colors.primary} />
           <Text style={styles.badgeText}>Premium rentals, delivered</Text>
@@ -30,7 +51,11 @@ export function HomeHero({ width, gutter }: { width: number; gutter: number }) {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     wrap: { backgroundColor: colors.bg },
-    copy: { paddingTop: 22, paddingBottom: 4 },
+    copy: { paddingTop: 20, paddingBottom: 4 },
+    greetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+    greetIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: withAlpha(colors.highlight, 0.16) },
+    greet: { flex: 1, color: colors.muted, fontSize: 18, fontWeight: '600' },
+    greetName: { color: colors.txt, fontWeight: '800' },
     badge: {
       flexDirection: 'row',
       alignItems: 'center',

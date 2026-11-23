@@ -7,6 +7,7 @@ import { useThemeColors, useThemedStyles, withAlpha, type ThemeColors } from '..
 import { useResponsive } from '../../hooks/useResponsive';
 import { KeyGoLogo } from './KeyGoLogo';
 import { Bell, UserRound } from 'lucide-react-native';
+import { callName } from '../../lib/names';
 
 export const KeyGoHeader: React.FC<{ transparent?: boolean }> = ({ transparent }) => {
   const colors = useThemeColors();
@@ -14,7 +15,8 @@ export const KeyGoHeader: React.FC<{ transparent?: boolean }> = ({ transparent }
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { isPhone } = useResponsive();
-  const { notifications, currentCustomerId } = useApp();
+  const { notifications, currentCustomerId, customers } = useApp();
+  const name = callName(customers.find((c) => c.id === currentCustomerId)) || 'My account';
 
   const unreadCount = notifications.filter((n) => n.unread && n.customerId === currentCustomerId).length;
 
@@ -24,9 +26,16 @@ export const KeyGoHeader: React.FC<{ transparent?: boolean }> = ({ transparent }
 
       <View style={styles.rightActions}>
         {!transparent ? (
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Customer account" style={styles.rolePill} activeOpacity={0.7} onPress={() => router.navigate('/(tabs)/profile' as any)}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`${name}, my account`}
+            style={styles.rolePill}
+            activeOpacity={0.7}
+            onPress={() => router.navigate('/(tabs)/profile' as any)}>
             <UserRound size={16} color={colors.onNav} />
-            <Text style={styles.roleText}>Customer</Text>
+            <Text style={styles.roleText} numberOfLines={1}>
+              {name}
+            </Text>
           </TouchableOpacity>
         ) : null}
         <TouchableOpacity
@@ -74,7 +83,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 18,
       backgroundColor: colors.navLine,
     },
-    roleText: { color: colors.onNav, fontSize: 13, fontWeight: '700' },
+    roleText: { color: colors.onNav, fontSize: 13, fontWeight: '700', maxWidth: 130 },
     iconBtn: {
       width: 36,
       height: 36,

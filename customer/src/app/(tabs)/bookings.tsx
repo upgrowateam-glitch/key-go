@@ -18,6 +18,7 @@ import {
   History,
   LifeBuoy,
 } from 'lucide-react-native';
+import { callName } from '../../lib/names';
 import { useApp } from '../../context/AppContext';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import {
@@ -108,7 +109,7 @@ export default function MyBookingsScreen() {
     <Screen bottomInset={64}>
       <PageHeader
         eyebrow="My bookings"
-        title={me ? `Hi, ${me.firstName}` : 'My bookings'}
+        title={me ? `Hi, ${callName(me)}` : 'My bookings'}
         subtitle={`${active.length} active · ${upcoming.length} upcoming · ${past.length} past`}
         actions={<Button label="Book a car" size="sm" onPress={() => router.push('/(tabs)/explore' as any)} icon={(c) => <Car size={14} color={c} />} />}
       />

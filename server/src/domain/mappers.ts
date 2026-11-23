@@ -365,7 +365,7 @@ export const normaliseEmail = (v: unknown) => optStr(v)?.toLowerCase() ?? null;
 export const normalisePhone = (v: unknown) => optStr(v)?.replace(/[\s-]/g, '') ?? null;
 
 /** Fields a customer may change on their own profile in the app. */
-export const CUSTOMER_SELF_EDITABLE = ['firstName', 'lastName', 'dob', 'phone', 'address', 'city', 'dlNumber', 'dlState', 'dlExpiry', 'careOfName', 'careOfRelation', 'careOfPhone', 'aadhaarNo'] as const;
+export const CUSTOMER_SELF_EDITABLE = ['firstName', 'lastName', 'nickname', 'dob', 'phone', 'address', 'city', 'dlNumber', 'dlState', 'dlExpiry', 'careOfName', 'careOfRelation', 'careOfPhone', 'aadhaarNo'] as const;
 
 export function customerFromApi(body: Json): Omit<Prisma.CustomerUncheckedCreateInput, 'id'> {
   return mapped('customer', () => {

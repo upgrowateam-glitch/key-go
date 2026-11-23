@@ -188,6 +188,8 @@ export interface Customer {
   name: string;
   firstName: string;
   lastName: string;
+  /** What the customer likes to be called (set in Profile); the app greets them by it instead of the first name. */
+  nickname?: string;
   dob: string;
   phone: string;
   email: string;
