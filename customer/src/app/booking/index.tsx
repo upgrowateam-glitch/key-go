@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, Calendar, CheckCircle2, Clock, CreditCard, Landmark, MapPin, QrCode, ShieldCheck, Smartphone, Wallet } from 'lucide-react-native';
+import { Bell, CheckCircle2, Clock, CreditCard, Landmark, MapPin, QrCode, ShieldCheck, Smartphone, Wallet } from 'lucide-react-native';
+import { DateField } from '../../components/ui/DateField';
+import { addDaysYmd, textToYmd, todayYmd } from '../../components/ui/DateCalendar';
 import { useApp } from '../../context/AppContext';
 import { useThemeColors, useThemedStyles, type ThemeColors } from '../../theme';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -246,11 +248,11 @@ export default function BookingFlowScreen() {
                         error={triedNext ? errors.pickupLocation : undefined}
                       />
                       <FormRow>
-                        <Field label="Pickup date" value={d.pickupDate} onChangeText={(t) => set({ pickupDate: t })} placeholder="YYYY-MM-DD" left={<Calendar size={16} color={colors.primaryText} />} error={triedNext ? errors.pickupDate : undefined} />
+                        <DateField label="Pickup date" value={d.pickupDate} onChange={(t) => set({ pickupDate: t })} min={todayYmd()} error={triedNext ? errors.pickupDate : undefined} />
                         <Field label="Pickup time" value={d.pickupTime} onChangeText={(t) => set({ pickupTime: t })} placeholder="10:00 AM" left={<Clock size={16} color={colors.primaryText} />} />
                       </FormRow>
                       <FormRow>
-                        <Field label="Return date" value={d.returnDate} onChangeText={(t) => set({ returnDate: t })} placeholder="YYYY-MM-DD" left={<Calendar size={16} color={colors.primaryText} />} error={triedNext ? errors.returnDate : undefined} />
+                        <DateField label="Return date" value={d.returnDate} onChange={(t) => set({ returnDate: t })} min={addDaysYmd(textToYmd(d.pickupDate) ?? todayYmd(), 1)} rangeFrom={textToYmd(d.pickupDate)} error={triedNext ? errors.returnDate : undefined} />
                         <Field label="Return time" value={d.returnTime} onChangeText={(t) => set({ returnTime: t })} placeholder="06:00 PM" left={<Clock size={16} color={colors.primaryText} />} />
                       </FormRow>
                     </Card>

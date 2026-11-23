@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { Calendar, CalendarCheck, ChevronRight, MapPin, Search, User } from 'lucide-react-native';
+import { CalendarCheck, ChevronRight, MapPin, Search, User } from 'lucide-react-native';
 import { Button, Field, FormSheet } from '../kit';
 import { boxShadow, useThemedStyles, useThemeColors, type ThemeColors } from '../../theme';
+import { DateField } from '../ui/DateField';
+import { addDaysYmd, textToYmd, todayYmd } from '../ui/DateCalendar';
 import { useApp } from '../../context/AppContext';
 
 const RENTAL_TYPES = [
@@ -85,21 +87,20 @@ export function RentalPlanner({ onSearch }: { onSearch: () => void }) {
       </TouchableOpacity>
 
       <View style={styles.dates}>
-        <Field
+        <DateField
           style={{ flex: 1 }}
           label="Pick-up date"
           value={bookingDraft.pickupDate}
-          onChangeText={(text) => setBookingDraft((prev) => ({ ...prev, pickupDate: text }))}
-          placeholder="YYYY-MM-DD"
-          left={<Calendar size={15} color={colors.primaryText} />}
+          onChange={(text) => setBookingDraft((prev) => ({ ...prev, pickupDate: text }))}
+          min={todayYmd()}
         />
-        <Field
+        <DateField
           style={{ flex: 1 }}
           label="Return date"
           value={bookingDraft.returnDate}
-          onChangeText={(text) => setBookingDraft((prev) => ({ ...prev, returnDate: text }))}
-          placeholder="YYYY-MM-DD"
-          left={<Calendar size={15} color={colors.primaryText} />}
+          onChange={(text) => setBookingDraft((prev) => ({ ...prev, returnDate: text }))}
+          min={addDaysYmd(textToYmd(bookingDraft.pickupDate) ?? todayYmd(), 1)}
+          rangeFrom={textToYmd(bookingDraft.pickupDate)}
         />
       </View>
       <Button label="Search available cars" size="lg" fullWidth onPress={onSearch} icon={(c) => <Search size={16} color={c} />} />
