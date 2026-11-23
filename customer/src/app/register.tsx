@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Link, useRouter } from 'expo-router';
-import { Calendar, Lock, Mail, Phone, User } from 'lucide-react-native';
+import { Lock, Mail, Phone, User } from 'lucide-react-native';
 import { Button, FormRow } from '../components/kit';
 import { GLASS, GlassField } from '../components/ui/GlassField';
+import { GlassDateField } from '../components/ui/GlassDateField';
 import { AuthBackdrop } from '../components/ui/AuthBackdrop';
 import { useApp } from '../context/AppContext';
 import { parseISODate } from '../lib/format';
@@ -95,13 +96,11 @@ export default function RegisterScreen() {
           required
           error={tried ? errors.email : undefined}
         />
-        <GlassField
+        <GlassDateField
           label="Date of birth"
           value={form.dob}
-          onChangeText={set('dob')}
-          keyboardType="numbers-and-punctuation"
-          placeholder="YYYY-MM-DD"
-          icon={<Calendar size={18} color={GLASS.soft} />}
+          onChange={set('dob')}
+          placeholder="Pick your date of birth"
           required
           error={tried ? errors.dob : undefined}
         />
